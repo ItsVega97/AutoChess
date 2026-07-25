@@ -4,10 +4,10 @@
  * Roster: 8 tripulaciones ("combos") con 5 miembros cada una (4 nakama +
  * su capitan como ficha legendaria de coste 5). 40 personajes en total.
  *
- * No usamos artwork oficial (sin fuente fiable y libre de derechos para
- * hotlink, y romperia en redes que bloqueen el CDN). En su lugar cada
- * personaje tiene un "cartel de se busca" generado con sus iniciales y el
- * color de su tripulacion, dibujado en cliente sin depender de la red.
+ * Cada personaje puede tener un retrato real (ver PORTRAITS mas abajo,
+ * fichero servido desde public/img/characters/). El que no tenga retrato
+ * usa como respaldo un "cartel de se busca" con sus iniciales y el color
+ * de su tripulacion, generado en cliente sin depender de ninguna imagen.
  */
 
 const BASE_STATS = {
@@ -70,6 +70,14 @@ const RAW = [
   { id: 'crocodile', name: 'Sir Crocodile', crew: 'baroque', cost: 5, range: 2, atkSpeed: 7, initials: 'SC', captain: true },
 ];
 
+// Retratos reales (archivo en public/img/characters/<fichero>), opcionales.
+// Un personaje sin entrada aqui usa el cartel de iniciales como respaldo.
+// Para anadir uno: guarda la imagen en public/img/characters/ y pon aqui
+// `id: 'nombre-de-archivo.jpg'`.
+const PORTRAITS = {
+  // luffy: 'luffy.jpg',
+};
+
 const CHARACTERS = RAW.map((c) => {
   const base = BASE_STATS[c.cost];
   return {
@@ -77,6 +85,7 @@ const CHARACTERS = RAW.map((c) => {
     hp: base.hp,
     atk: base.atk,
     def: base.def,
+    portrait: PORTRAITS[c.id] || null,
   };
 });
 

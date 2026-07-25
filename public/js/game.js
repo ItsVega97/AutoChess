@@ -37,6 +37,21 @@
     baroque: { fill: '#e8862f', ring: '#3a2410' },
   };
 
+  // Cache de retratos para el tablero. Son ficheros propios (mismo origen),
+  // asi que a diferencia de un hotlink externo son fiables: si no existe,
+  // el error llega rapido y nos quedamos con el cartel de iniciales.
+  const portraitCache = new Map();
+  function getPortraitImage(filename) {
+    let img = portraitCache.get(filename);
+    if (!img) {
+      img = new Image();
+      img.src = `/img/characters/${filename}`;
+      img.onload = () => scheduleRedraw();
+      portraitCache.set(filename, img);
+    }
+    return img;
+  }
+
   // ---------------- Utilidades UI ----------------
   function show(id) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
@@ -244,8 +259,21 @@
   document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
   document.getElementById('btn-reroll').addEventListener('click', () => socket.emit('reroll'));
 
-  // ---------------- Avatares tipo "se busca" (sin imagenes externas) ----------------
+  // ---------------- Avatares: retrato real si existe, si no cartel de iniciales ----------------
   function makeAvatarEl(p) {
+    if (p.portrait) {
+      const wrap = el('div', `unit-avatar unit-avatar-img${p.captain ? ' captain' : ''}`);
+      const img = el('img');
+      img.src = `/img/characters/${p.portrait}`;
+      img.alt = p.name;
+      img.onerror = () => {
+        // el fichero no existe o fallo al cargar: caemos al cartel de iniciales
+        wrap.classList.remove('unit-avatar-img');
+        wrap.textContent = p.initials;
+      };
+      wrap.appendChild(img);
+      return wrap;
+    }
     const avatar = el('div', 'unit-avatar', p.initials);
     if (p.captain) avatar.classList.add('captain');
     return avatar;
@@ -536,15 +564,17 @@
     }
   }
 
-  // Dibuja el "cartel de se busca" de un personaje directamente en el
-  // canvas: circulo con el color de su tripulacion, iniciales y, si es
-  // capitan, una corona y un anillo dorado. No depende de ninguna imagen
-  // externa, asi que nunca se rompe por red.
+  // Dibuja el avatar de un personaje en el canvas: su retrato real si ya
+  // esta cargado, o si no un "cartel de se busca" (circulo con el color de
+  // su tripulacion e iniciales) mientras tanto. Capitanes llevan corona y
+  // anillo dorado en ambos casos.
   function drawUnitAvatar(pokemonId, star, cx, cy, hpFrac, shieldFrac, sideColor, scale = 1) {
     const p = charDb[pokemonId];
     if (!p) return;
     const size = CELL * 0.82 * scale;
     const style = CREW_STYLE[p.crew] || { fill: '#26407a', ring: '#0e2140' };
+    const img = p.portrait ? getPortraitImage(p.portrait) : null;
+    const imgReady = !!(img && img.complete && img.naturalWidth);
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(cx, cy + size * 0.36, size * 0.32, size * 0.11, 0, 0, Math.PI * 2);
@@ -561,21 +591,31 @@
 
     ctx.beginPath();
     ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = style.fill;
-    ctx.fill();
+    if (imgReady) {
+      ctx.save();
+      ctx.clip();
+      ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = style.fill;
+      ctx.fill();
+    }
     ctx.lineWidth = p.captain ? 4 : 2;
     ctx.strokeStyle = p.captain ? '#ffd23f' : style.ring;
     ctx.stroke();
 
-    ctx.fillStyle = '#fff';
-    ctx.font = `900 ${Math.round(size * 0.3)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(p.initials, cx, cy + 1);
-    ctx.textBaseline = 'alphabetic';
+    if (!imgReady) {
+      ctx.fillStyle = '#fff';
+      ctx.font = `900 ${Math.round(size * 0.3)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.initials, cx, cy + 1);
+      ctx.textBaseline = 'alphabetic';
+    }
 
     if (p.captain) {
       ctx.font = `${Math.round(size * 0.36)}px sans-serif`;
+      ctx.textAlign = 'center';
       ctx.fillText('👑', cx, cy - size * 0.38);
     }
 
