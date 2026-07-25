@@ -29,7 +29,13 @@ import { createScene } from './scene3d.js';
   // variable CSS y lo refrescamos cuando cambia (girar el movil, barra que
   // aparece o desaparece...).
   function syncAppHeight() {
-    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    // Nos quedamos con la medida MAS pequena de todas las que da el navegador:
+    // cada una miente de una forma distinta segun las barras que tenga puestas,
+    // y quedarse corto solo deja un borde de fondo, mientras que pasarse deja
+    // la tienda debajo de la barra del navegador y sin poder tocarla.
+    const medidas = [window.innerHeight, document.documentElement.clientHeight];
+    if (window.visualViewport) medidas.push(window.visualViewport.height);
+    const h = Math.min(...medidas.filter((n) => n > 0));
     document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
     if (scene) {
       scene.resize();
@@ -65,6 +71,10 @@ import { createScene } from './scene3d.js';
     if (id === 'screen-game') {
       syncAppHeight();
       if (scene) setTimeout(() => scene.resize(), 30);
+      // Las barras del navegador movil tardan un poco en asentarse al entrar a
+      // pantalla completa: volvemos a medir para no quedarnos con un valor viejo.
+      setTimeout(syncAppHeight, 300);
+      setTimeout(syncAppHeight, 1200);
     }
   }
 

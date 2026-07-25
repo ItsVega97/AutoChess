@@ -332,18 +332,23 @@ export function createScene(container) {
   const mixers = new Set();       // animaciones activas, una por ficha con modelo
   const MODEL_HEIGHT = 1.15;      // alto objetivo, similar al del cartel
 
-  // El servidor nos dice de una sola vez que personajes tienen modelo subido,
-  // asi no pedimos 40 archivos que en su mayoria no existen. Si el endpoint no
-  // esta (version antigua del servidor), se prueba el archivo directamente.
+  // El servidor nos dice de una sola vez que personajes tienen modelo subido y
+  // con que ruta exacta pedirlo, asi no lanzamos 40 peticiones que en su
+  // mayoria no existen. Si el endpoint no esta (servidor antiguo), probamos la
+  // ruta por defecto directamente.
   let modelIndex = null;
-  function modelExists(char) {
+  function modelUrl(char) {
+    const porDefecto = `models/${char.crew}/${char.id}.glb`;
     if (!modelIndex) {
       modelIndex = fetch('api/models')
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => (d && Array.isArray(d.models) ? new Set(d.models) : null))
+        .then((d) => (d && d.models && typeof d.models === 'object' ? d.models : null))
         .catch(() => null);
     }
-    return modelIndex.then((set) => !set || set.has(`${char.crew}/${char.id}`));
+    return modelIndex.then((mapa) => {
+      if (!mapa) return porDefecto;
+      return mapa[`${char.crew}/${char.id}`.toLowerCase()] || null;
+    });
   }
 
   // Descarga el .glb una sola vez por personaje. Si no existe se recuerda el
@@ -352,9 +357,8 @@ export function createScene(container) {
     if (modelFiles.has(char.id)) return Promise.resolve(modelFiles.get(char.id));
     if (modelPending.has(char.id)) return modelPending.get(char.id);
 
-    const url = `models/${char.crew}/${char.id}.glb`;
-    const p = modelExists(char)
-      .then((hay) => (hay ? fetch(url) : null))
+    const p = modelUrl(char)
+      .then((url) => (url ? fetch(url) : null))
       .then((r) => (r && r.ok ? r.arrayBuffer() : null))
       // un .glb empieza por "glTF": si llega otra cosa (una pagina de error,
       // por ejemplo) lo descartamos antes de intentar parsearlo
@@ -406,6 +410,7 @@ export function createScene(container) {
       if (!tok.group.parent) { disposeTree(res.root); return; } // la ficha ya no existe
       tok.group.add(res.root);
       tok.model = res.root;
+      tok.model.position.y = 0.12; // de pie sobre la peana, no atravesandola
       tok.model.rotation.y = tok.facing || 0; // orientacion ya calculada en syncUnits
       tok.panel.visible = false;
 

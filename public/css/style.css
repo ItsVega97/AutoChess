@@ -35,6 +35,7 @@ button { font-family: var(--font); cursor: pointer; }
    real (window.innerHeight), porque en moviles la barra del navegador hace que
    100vh sea MAS alto que lo que se ve y obligue a hacer scroll. */
 body.in-game { overflow: hidden; height: var(--app-height, 100dvh); }
+body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 
 /* ---------- Botones estilo Supercell ---------- */
 .btn {
@@ -114,7 +115,16 @@ body.in-game { overflow: hidden; height: var(--app-height, 100dvh); }
   display: block;
   position: fixed;
   inset: 0;
+  /* OJO: hay que anular el min-height:100vh de .screen. min-height gana a
+     height, y en movil 100vh es el viewport SIN las barras del navegador, con
+     lo que la pantalla se hacia mas alta de lo que se ve y la tienda acababa
+     debajo de la barra inferior del navegador. */
+  min-height: 0;
   height: var(--app-height, 100dvh);
+  /* svh = viewport con las barras del navegador desplegadas, o sea el minimo
+     garantizado. Si el navegador miente con visualViewport (Brave en Android
+     no descuenta su barra inferior), esto nos salva igualmente. */
+  height: min(var(--app-height, 100svh), 100svh);
   overflow: hidden;
 }
 

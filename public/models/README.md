@@ -33,6 +33,13 @@ No hace falta tenerlos todos: puedes ir subiéndolos de uno en uno.
 - **`.glb`** (glTF binario, un único archivo con mallas y texturas dentro).
 - Bajo poligonaje: son 12 fichas en pantalla a la vez y tiene que ir fluido en
   el móvil. Unos pocos miles de triángulos por modelo es lo ideal.
+- **Peso del archivo**: apunta a menos de 2 MB por personaje. Lo que más pesa
+  casi siempre son las texturas: bajarlas a 1024x1024 y guardarlas como JPEG en
+  vez de PNG suele dejar el archivo en una décima parte sin que se note en
+  pantalla, porque cada ficha se ve del tamaño de una casilla. Un `.glb` de
+  10-15 MB funciona, pero se nota al entrar a la partida desde el móvil.
+  Con [gltf-transform](https://gltf-transform.dev) es un comando:
+  `gltf-transform optimize entrada.glb salida.glb --texture-size 1024`.
 - Pose neutra o T-pose. Si trae animaciones, se reproduce la primera en bucle.
 - El juego reescala cada modelo automáticamente a la altura de una casilla, lo
   centra y lo gira hacia el bando contrario, así que no te preocupes por la

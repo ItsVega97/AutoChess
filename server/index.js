@@ -31,20 +31,25 @@ app.get('/api/units', (req, res) => {
 // tienen .glb subido, asi no va pidiendo 40 archivos que casi nunca existen.
 // Se recalcula cada 30s: basta con dejar el archivo en su carpeta.
 const MODELS_DIR = path.join(__dirname, '..', 'public', 'models');
-let modelsCache = { at: 0, ids: [] };
+// Devuelve { "tripulacion/id": "models/Tripulacion/Id.glb" }: la clave va en
+// minusculas para que dé igual como se llame el archivo (Usopp.glb, usopp.GLB)
+// y el valor es la ruta real con la que hay que pedirlo.
+let modelsCache = { at: 0, map: {} };
 function listModels() {
-  if (Date.now() - modelsCache.at < 30000) return modelsCache.ids;
-  const ids = [];
+  if (Date.now() - modelsCache.at < 30000) return modelsCache.map;
+  const map = {};
   try {
     for (const crew of fs.readdirSync(MODELS_DIR, { withFileTypes: true })) {
       if (!crew.isDirectory()) continue;
       for (const f of fs.readdirSync(path.join(MODELS_DIR, crew.name))) {
-        if (f.toLowerCase().endsWith('.glb')) ids.push(`${crew.name}/${f.slice(0, -4)}`);
+        if (!f.toLowerCase().endsWith('.glb')) continue;
+        const id = f.slice(0, -4).toLowerCase();
+        map[`${crew.name.toLowerCase()}/${id}`] = `models/${crew.name}/${f}`;
       }
     }
   } catch (e) { /* sin carpeta de modelos: se juega con las fichas planas */ }
-  modelsCache = { at: Date.now(), ids };
-  return ids;
+  modelsCache = { at: Date.now(), map };
+  return map;
 }
 app.get('/api/models', (req, res) => res.json({ models: listModels() }));
 
