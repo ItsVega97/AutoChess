@@ -93,14 +93,20 @@
   const nameInput = document.getElementById('input-name');
   nameInput.value = localStorage.getItem('pcr-name') || '';
 
+  let searchingOnline = false;
+  let searchingName = null;
+
   document.getElementById('btn-play-online').addEventListener('click', () => {
     const name = (nameInput.value || 'Entrenador').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
+    searchingOnline = true;
+    searchingName = name;
     socket.emit('findMatch', { name });
     document.getElementById('queue-status').classList.remove('hidden');
   });
 
   document.getElementById('btn-cancel-queue').addEventListener('click', () => {
+    searchingOnline = false;
     socket.emit('cancelFindMatch');
     document.getElementById('queue-status').classList.add('hidden');
   });
@@ -120,6 +126,7 @@
   let sessionToken = null;
   socket.on('matchFound', ({ you, opponentName, token }) => {
     mySide = you;
+    searchingOnline = false;
     if (token) sessionToken = token;
     document.getElementById('queue-status').classList.add('hidden');
     document.getElementById('hud-opp-name').textContent = opponentName;
@@ -130,8 +137,15 @@
 
   // Si el socket se cae y socket.io reconecta solo, recuperamos el sitio
   // en la partida con el token guardado (sin perder progreso ni el rival).
+  // Si todavia estabamos buscando rival (sin token, sin partida empezada),
+  // nos volvemos a apuntar a la cola: si no, el cliente se queda mostrando
+  // "buscando" para siempre aunque el servidor ya nos haya sacado de la cola.
   socket.on('connect', () => {
-    if (sessionToken) socket.emit('rejoin', { token: sessionToken });
+    if (sessionToken) {
+      socket.emit('rejoin', { token: sessionToken });
+    } else if (searchingOnline) {
+      socket.emit('findMatch', { name: searchingName });
+    }
   });
 
   socket.on('disconnect', () => {
