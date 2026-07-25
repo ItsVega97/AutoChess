@@ -2,16 +2,13 @@
 
 const { CHARACTERS } = require('./characterData');
 
-const SHOP_ODDS = {
-  1: [100, 0, 0, 0, 0],
-  2: [80, 20, 0, 0, 0],
-  3: [65, 25, 10, 0, 0],
-  4: [50, 30, 15, 5, 0],
-  5: [40, 30, 20, 8, 2],
-  6: [30, 30, 25, 10, 5],
-  7: [20, 25, 30, 18, 7],
-  8: [15, 20, 25, 25, 15],
-};
+// Probabilidad de que un hueco de la tienda saque un personaje de cada coste.
+// Como en Tactics Royale, el roster entero esta disponible desde la primera
+// ronda: los capitanes (coste 5) pueden salir ya en la ronda 1, solo que muy de
+// vez en cuando. Las probabilidades no cambian nunca, lo que cambia es el oro
+// que tienes para aprovecharlas.
+//         coste:   1   2   3   4   5
+const COST_ODDS = [ 40, 26, 18, 11,  5];
 
 const POOL_BY_COST = {};
 for (const c of CHARACTERS) {
@@ -25,18 +22,12 @@ function teamSizeForRound(round) {
   return Math.min(MAX_TEAM, Math.max(1, round));
 }
 
-// La calidad de la tienda va por su cuenta: sube cada dos rondas hasta 8, que
-// es donde salen los capitanes. Ya no depende del tamano del equipo.
-function shopTierForRound(round) {
-  return Math.min(8, Math.max(1, Math.floor((round + 1) / 2)));
-}
-
-function rollCost(tier) {
-  const odds = SHOP_ODDS[Math.min(8, Math.max(1, tier))];
-  const r = Math.random() * 100;
+const TOTAL_ODDS = COST_ODDS.reduce((a, b) => a + b, 0);
+function rollCost() {
+  const r = Math.random() * TOTAL_ODDS;
   let acc = 0;
-  for (let i = 0; i < odds.length; i++) {
-    acc += odds[i];
+  for (let i = 0; i < COST_ODDS.length; i++) {
+    acc += COST_ODDS[i];
     if (r < acc) return i + 1;
   }
   return 1;
@@ -45,10 +36,10 @@ function rollCost(tier) {
 // La tienda ensena 4 personajes y se renueva entera cada vez que compras uno,
 // como en Tactics Royale.
 const SHOP_SIZE = 4;
-function rollShop(tier) {
+function rollShop() {
   const shop = [];
   for (let i = 0; i < SHOP_SIZE; i++) {
-    const cost = rollCost(tier);
+    const cost = rollCost();
     const pool = POOL_BY_COST[cost] || POOL_BY_COST[1];
     const pick = pool[Math.floor(Math.random() * pool.length)];
     shop.push(pick.id);
@@ -77,6 +68,6 @@ function roundDamage(round, survivors) {
 }
 
 module.exports = {
-  SHOP_ODDS, MAX_TEAM, SHOP_SIZE,
-  teamSizeForRound, shopTierForRound, rollShop, goldIncome, roundDamage,
+  COST_ODDS, MAX_TEAM, SHOP_SIZE,
+  teamSizeForRound, rollShop, goldIncome, roundDamage,
 };

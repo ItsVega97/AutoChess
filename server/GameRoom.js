@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
-const { teamSizeForRound, shopTierForRound, rollShop, goldIncome, roundDamage, SHOP_SIZE } = require('./economy');
+const { teamSizeForRound, rollShop, goldIncome, roundDamage, SHOP_SIZE } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 
 const PREP_MS = 30000;
@@ -27,8 +27,7 @@ function newPlayer(id, name, isBot) {
     hp: START_HP,
     gold: START_GOLD,
     round: 0,
-    maxTeam: 1,   // cuantas tropas caben en la cubierta: +1 por combate, hasta 6
-    shopTier: 1,  // calidad de la tienda, sube por su cuenta cada dos rondas
+    maxTeam: 1, // cuantas tropas caben en la cubierta: +1 por combate, hasta 6
     winStreak: 0,
     lossStreak: 0,
     shop: new Array(SHOP_SIZE).fill(null),
@@ -110,8 +109,7 @@ class GameRoom {
       if (!p.alive) continue;
       p.round = this.round;
       p.maxTeam = teamSizeForRound(this.round);
-      p.shopTier = shopTierForRound(this.round);
-      p.shop = rollShop(p.shopTier);
+      p.shop = rollShop();
       p.ready = false;
       const streak = Math.max(p.winStreak, p.lossStreak);
       if (this.round > 1) p.gold += goldIncome(p.gold, streak);
@@ -186,7 +184,7 @@ class GameRoom {
     p.bench[benchIdx] = { uid: this.nextUid(), pokemonId, star: 1 };
     // Al estilo Tactics Royale: comprar renueva la tienda entera, no deja el
     // hueco vacio. La tirada es gratis, el reroll manual sigue costando oro.
-    p.shop = rollShop(p.shopTier);
+    p.shop = rollShop();
     this.runMerges(p);
     if (!skipEmit) this.broadcastState();
   }
@@ -271,7 +269,7 @@ class GameRoom {
     if (this.phase !== 'prep' || !p.alive) return;
     if (p.gold < 2) return;
     p.gold -= 2;
-    p.shop = rollShop(p.shopTier);
+    p.shop = rollShop();
     if (!skipEmit) this.broadcastState();
   }
 

@@ -59,6 +59,19 @@ arranque `npm start` y puerto por `process.env.PORT`).
    La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
    uno**, así que comprar nunca deja huecos vacíos; el reroll manual (2🪙) sigue
    estando para cuando no te gusta ninguno.
+   Los **40 personajes están disponibles desde la primera ronda**, capitanes
+   incluidos: lo que cambia es lo raro que es que salga cada uno según su coste.
+
+   | Coste | Probabilidad por hueco |
+   |---|---|
+   | 1 🪙 | 40% |
+   | 2 🪙 | 26% |
+   | 3 🪙 | 18% |
+   | 4 🪙 | 11% |
+   | 5 🪙 (capitán) | 5% |
+
+   Con 4 huecos, eso es un **18,5% de tiendas con capitán**: puedes fichar a
+   Shanks en la ronda 1 si tienes suerte y te gastas medio bolsillo en él.
 2. **Combate automático**: tu tripulación lucha sola contra la del rival, con la
    formación exacta en la que la colocaste. Gana quien deje unidades vivas; el
    perdedor pierde vida según lo que sobrevivió al ganador.
@@ -66,9 +79,7 @@ arranque `npm start` y puerto por `process.env.PORT`).
    hueco después de cada combate hasta un máximo de **6**. El marcador de arriba
    (⚔️ 3/4) dice cuántas llevas en cubierta y cuántas te caben; no es un nivel.
    Con el cupo lleno solo puedes cambiar una tropa por otra del banquillo.
-   La tienda mejora por su cuenta cada dos rondas (personajes más caros y
-   capitanes), y la partida acaba cuando uno de los dos llega a 0 de sus 20
-   puntos de vida.
+   La partida acaba cuando uno de los dos llega a 0 de sus 20 puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 5. **Habilidades**: cada personaje llena su barra de maná (azul, debajo de la de
@@ -151,8 +162,8 @@ completa de nombres de archivo por tripulación.
 
 - `server/characterData.js` — roster de 40 personajes (con su habilidad y coste
   de maná) y definición de los 8 combos.
-- `server/economy.js` — tienda (4 huecos), probabilidades por ronda, cupo de
-  tropas, oro, ingresos y daño.
+- `server/economy.js` — tienda (4 huecos), probabilidades fijas por coste,
+  cupo de tropas, oro, ingresos y daño.
 - `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista
   sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
   quemaduras, escudos...) que el cliente reproduce para animar el combate igual
