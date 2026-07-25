@@ -356,13 +356,27 @@ import { createScene } from './scene3d.js';
       <div class="row"><span>Vida</span><span>${p.hp}</span></div>
       <div class="row"><span>Ataque</span><span>${p.atk}</span></div>
       <div class="row"><span>Defensa</span><span>${p.def}</span></div>
-      <div class="row"><span>Alcance</span><span>${p.range}</span></div>`;
+      <div class="row"><span>Alcance</span><span>${p.range}</span></div>
+      ${p.ability ? `<div class="tt-ability">
+        <div class="tt-ability-name">⚡ ${p.ability.name} <span class="tt-mana">${p.ability.mana} maná</span></div>
+        <div class="tt-ability-desc">${p.ability.desc}</div>
+      </div>` : ''}`;
     tooltip.classList.remove('hidden');
     moveTooltip(e);
   }
+  // Coloca el tooltip junto al cursor pero sin salirse de la pantalla: si no
+  // cabe debajo o a la derecha, lo pasa al otro lado.
   function moveTooltip(e) {
-    tooltip.style.left = `${e.clientX + 16}px`;
-    tooltip.style.top = `${e.clientY + 16}px`;
+    tooltip.style.left = '0px';
+    tooltip.style.top = '0px';
+    const r = tooltip.getBoundingClientRect();
+    const pad = 12;
+    let x = e.clientX + 16;
+    let y = e.clientY + 16;
+    if (x + r.width + pad > window.innerWidth) x = e.clientX - r.width - 16;
+    if (y + r.height + pad > window.innerHeight) y = e.clientY - r.height - 16;
+    tooltip.style.left = `${Math.max(pad, x)}px`;
+    tooltip.style.top = `${Math.max(pad, y)}px`;
   }
   function hideTooltip() {
     tooltip.classList.add('hidden');
@@ -443,6 +457,7 @@ import { createScene } from './scene3d.js';
           x: e.x, y: e.y, fromX: e.x, fromY: e.y, toX: e.x, toY: e.y,
           moveStart: 0, moveDur: 1,
           hp: e.hp, maxHp: e.maxHp,
+          mana: 0, maxMana: e.maxMana || 0,
           alive: true,
         });
         break;
@@ -459,6 +474,8 @@ import { createScene } from './scene3d.js';
       case 'attack': {
         const u = battleUnits.get(e.uid);
         const t = battleUnits.get(e.target);
+        if (u && e.mana !== undefined) u.mana = e.mana;
+        if (t && e.tMana !== undefined) t.mana = e.tMana;
         if (t) t.hp = e.hp;
         if (u && t && scene) {
           const a = battleToRender(u.x, u.y);
@@ -496,6 +513,8 @@ import { createScene } from './scene3d.js';
         break;
       }
       case 'dodge': {
+        const a = battleUnits.get(e.attacker);
+        if (a && e.mana !== undefined) a.mana = e.mana;
         const t = battleUnits.get(e.uid);
         if (t && scene) {
           const b = battleToRender(t.x, t.y);
@@ -511,6 +530,27 @@ import { createScene } from './scene3d.js';
         }
         break;
       }
+      case 'ability': {
+        const u = battleUnits.get(e.uid);
+        if (u) u.mana = 0;
+        if (u && scene) {
+          const p = battleToRender(u.x, u.y);
+          scene.addAbilityBurst(p.col, p.row);
+          scene.addFloatingText(p.col, p.row, e.name, '#ffd23f');
+        }
+        break;
+      }
+      case 'abilityHit': {
+        const t = battleUnits.get(e.uid);
+        if (t) {
+          t.hp = e.hp;
+          const p = battleToRender(t.x, t.y);
+          if (scene) scene.addFloatingText(p.col, p.row, `-${e.damage}`, '#ffb347');
+        }
+        break;
+      }
+      case 'shielded':
+        break;
       case 'death': {
         const u = battleUnits.get(e.uid);
         if (u) { u.alive = false; u.deathAt = now; }
@@ -553,6 +593,8 @@ import { createScene } from './scene3d.js';
         selected: false,
         showHp: u.alive,
         hpFrac: u.hp / u.maxHp,
+        mana: u.mana,
+        maxMana: u.maxMana,
         opacity: fade,
       });
     }

@@ -329,7 +329,7 @@ export function createScene(container) {
       new THREE.PlaneGeometry(0.72, 0.1),
       new THREE.MeshBasicMaterial({ color: '#1a1a1a', transparent: true, opacity: 0.75 })
     );
-    hpBack.position.y = 1.4;
+    hpBack.position.y = 1.62;
     hpBack.visible = false;
     group.add(hpBack);
 
@@ -337,12 +337,29 @@ export function createScene(container) {
       new THREE.PlaneGeometry(0.68, 0.07),
       new THREE.MeshBasicMaterial({ color: '#3ddc84' })
     );
-    hpFill.position.set(0, 1.4, 0.01);
+    hpFill.position.set(0, 1.62, 0.01);
     hpFill.visible = false;
     group.add(hpFill);
 
+    // Barra de mana, justo debajo de la de vida
+    const manaBack = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.72, 0.07),
+      new THREE.MeshBasicMaterial({ color: '#0b1a33', transparent: true, opacity: 0.8 })
+    );
+    manaBack.position.y = 1.49;
+    manaBack.visible = false;
+    group.add(manaBack);
+
+    const manaFill = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.68, 0.045),
+      new THREE.MeshBasicMaterial({ color: '#4dc3ff' })
+    );
+    manaFill.position.set(0, 1.49, 0.01);
+    manaFill.visible = false;
+    group.add(manaFill);
+
     world.add(group);
-    return { group, panel, base, hpBack, hpFill, panelMat };
+    return { group, panel, base, hpBack, hpFill, manaBack, manaFill, panelMat };
   }
 
   /**
@@ -380,11 +397,27 @@ export function createScene(container) {
         const frac = Math.max(0, Math.min(1, u.hpFrac));
         tok.hpFill.scale.x = frac || 0.0001;
         // escalar encoge desde el centro: desplazamos para que se vacie por la derecha
-        tok.hpFill.position.set(-(1 - frac) * 0.34, 1.4, 0.01);
+        tok.hpFill.position.set(-(1 - frac) * 0.34, 1.62, 0.01);
         tok.hpFill.material.color.set(frac > 0.5 ? '#3ddc84' : frac > 0.25 ? '#ffd23f' : '#ff5d6c');
       } else {
         tok.hpBack.visible = false;
         tok.hpFill.visible = false;
+      }
+
+      // Barra de mana: solo tiene sentido si el personaje tiene habilidad
+      if (u.showHp && u.maxMana > 0) {
+        tok.manaBack.visible = true;
+        tok.manaFill.visible = true;
+        tok.manaBack.quaternion.copy(camera.quaternion);
+        tok.manaFill.quaternion.copy(camera.quaternion);
+        const mf = Math.max(0, Math.min(1, (u.mana || 0) / u.maxMana));
+        tok.manaFill.scale.x = mf || 0.0001;
+        tok.manaFill.position.set(-(1 - mf) * 0.34, 1.49, 0.01);
+        // al llenarse parpadea en dorado: la habilidad esta a punto de salir
+        tok.manaFill.material.color.set(mf >= 1 ? '#ffd23f' : '#4dc3ff');
+      } else {
+        tok.manaBack.visible = false;
+        tok.manaFill.visible = false;
       }
 
       // Realce de seleccion: la ficha flota un poco
@@ -410,6 +443,36 @@ export function createScene(container) {
     }
   }
 
+  // ---------------- Onda expansiva al lanzar una habilidad ----------------
+  const bursts = [];
+  const burstGeo = new THREE.RingGeometry(0.3, 0.45, 24);
+  burstGeo.rotateX(-Math.PI / 2);
+  function addAbilityBurst(col, row) {
+    const mesh = new THREE.Mesh(burstGeo, new THREE.MeshBasicMaterial({
+      color: '#ffd23f', transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    }));
+    const { x, z } = cellToWorld(col, row);
+    mesh.position.set(x, 0.1, z);
+    world.add(mesh);
+    bursts.push({ mesh, born: performance.now() });
+  }
+
+  function updateBursts(now) {
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const b = bursts[i];
+      const age = (now - b.born) / 550;
+      if (age >= 1) {
+        world.remove(b.mesh);
+        b.mesh.material.dispose();
+        bursts.splice(i, 1);
+        continue;
+      }
+      const s = 1 + age * 3.2;
+      b.mesh.scale.set(s, s, s);
+      b.mesh.material.opacity = 1 - age;
+    }
+  }
+
   // ---------------- Textos flotantes (dano, curacion...) ----------------
   const floats = [];
   function addFloatingText(col, row, text, color) {
@@ -428,7 +491,7 @@ export function createScene(container) {
     tex.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     const { x, z } = cellToWorld(col, row);
-    sprite.position.set(x, 1.3, z);
+    sprite.position.set(x, 1.85, z);
     sprite.scale.set(1.1, 0.55, 1);
     world.add(sprite);
     floats.push({ sprite, born: performance.now(), tex });
@@ -445,7 +508,7 @@ export function createScene(container) {
         floats.splice(i, 1);
         continue;
       }
-      f.sprite.position.y = 1.3 + age * 0.9;
+      f.sprite.position.y = 1.85 + age * 0.9;
       f.sprite.material.opacity = 1 - age;
     }
   }
@@ -531,6 +594,7 @@ export function createScene(container) {
 
     updateFloats(now);
     updateBeams(now);
+    updateBursts(now);
     renderer.render(scene, camera);
   }
 
@@ -547,7 +611,7 @@ export function createScene(container) {
 
   return {
     setBoard, syncUnits, setHighlights, pickCell,
-    addFloatingText, addAttackBeam, resize, dispose,
+    addFloatingText, addAttackBeam, addAbilityBurst, resize, dispose,
     get cols() { return cols; },
     get rows() { return rows; },
   };

@@ -60,6 +60,13 @@ arranque `npm start` y puerto por `process.env.PORT`).
    de sus 20 puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
+5. **Habilidades**: cada personaje llena su barra de maná (azul, debajo de la de
+   vida) atacando y encajando golpes. Al llenarla lanza su técnica — desde el
+   *Hiken* de Ace hasta el *Shima Yurashi* de Barbablanca. Puedes consultar la
+   habilidad de cada uno pasando el ratón por su ficha en la tienda.
+
+Solo cabe **un personaje por casilla**, tanto al colocarlos como durante el
+combate: las unidades cuerpo a cuerpo rodean al rival en vez de amontonarse.
 
 ## Las 8 tripulaciones (combos)
 
@@ -120,7 +127,8 @@ Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
 
 ## Arquitectura
 
-- `server/characterData.js` — roster de 40 personajes y definición de los 8 combos.
+- `server/characterData.js` — roster de 40 personajes (con su habilidad y coste
+  de maná) y definición de los 8 combos.
 - `server/economy.js` — tienda, probabilidades por nivel, oro, ingresos y daño.
 - `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista
   sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
@@ -134,6 +142,18 @@ Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
 - `public/js/game.js` — sockets, interfaz 2D (tienda, banquillo, HUD) y la
   traducción entre las coordenadas del servidor y las de la escena.
 - `public/vendor/` — Three.js incluido en el repo (ver el README de esa carpeta).
+
+## Herramientas de comprobación
+
+```bash
+node verify_battle.js   # 300 combates: comprueba que nunca se apilan unidades
+node tune.js            # equilibrio de las 8 sinergias
+```
+
+`tune.js` da dos medidas porque una sola engaña: el enfrentamiento espejo
+(tripulación contra tripulación) amplifica muchísimo cualquier diferencia y sirve
+solo para ordenar, mientras que la prueba con equipos mixtos al azar refleja lo
+que pasa en una partida real.
 
 ## Notas
 
