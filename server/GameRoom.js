@@ -84,6 +84,11 @@ class GameRoom {
   start() {
     this.round = 1;
     this.beginPrep();
+    // Reenvio de seguridad: si el primer 'state' se pierde justo cuando el
+    // cliente todavia esta terminando de procesar 'matchFound' (tipico en
+    // moviles saliendo de segundo plano), esto lo repara sin que el jugador
+    // tenga que hacer nada.
+    setTimeout(() => { if (!this.ended) this.broadcastState(); }, 1500);
   }
 
   clearTimer() {

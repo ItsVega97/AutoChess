@@ -73,13 +73,24 @@
   }
 
   // ---------------- Carga inicial de datos ----------------
-  fetch('/api/pokemon')
-    .then((r) => r.json())
-    .then((data) => {
-      pokemonDb = Object.fromEntries(data.pokemon.map((p) => [p.id, p]));
-      synergyDb = data.synergies;
-      renderComboPreview();
-    });
+  function loadPokemonDb(attempt = 1) {
+    fetch('/api/pokemon')
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        pokemonDb = Object.fromEntries(data.pokemon.map((p) => [p.id, p]));
+        synergyDb = data.synergies;
+        renderComboPreview();
+        if (myState) { renderShop(myState.you); renderBench(myState.you); scheduleRedraw(); }
+      })
+      .catch((err) => {
+        console.error('No se pudieron cargar los datos de Pokémon, reintentando...', err);
+        if (attempt <= 5) setTimeout(() => loadPokemonDb(attempt + 1), 1000 * attempt);
+      });
+  }
+  loadPokemonDb();
 
   function renderComboPreview() {
     const wrap = document.getElementById('combo-icons');
@@ -186,6 +197,14 @@
 
   // ---------------- Estado de partida ----------------
   socket.on('state', (payload) => {
+    try {
+      renderState(payload);
+    } catch (err) {
+      console.error('Error renderizando el estado de la partida:', err);
+    }
+  });
+
+  function renderState(payload) {
     myState = payload;
     document.getElementById('hud-phase').textContent =
       { prep: 'Preparación', battle: 'Combate', result: 'Resultado', lobby: 'Cargando' }[payload.phase] || payload.phase;
@@ -225,7 +244,7 @@
     if (payload.phase === 'prep' && !battleActive) {
       scheduleRedraw();
     }
-  });
+  }
 
   socket.on('tick', ({ timeLeft }) => {
     document.getElementById('hud-timer').textContent = Math.max(0, Math.ceil(timeLeft / 1000));
