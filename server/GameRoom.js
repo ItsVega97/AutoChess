@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { POKEMON_BY_ID, MAX_STAR } = require('./pokemonData');
+const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
 const { levelForRound, boardCapacityForLevel, rollShop, goldIncome, roundDamage } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 
@@ -141,7 +141,7 @@ class GameRoom {
     while (guard++ < 20) {
       const emptyBench = bot.bench.findIndex((s) => s === null);
       if (emptyBench === -1) break;
-      const slotIdx = bot.shop.findIndex((id) => id && POKEMON_BY_ID[id].cost <= bot.gold);
+      const slotIdx = bot.shop.findIndex((id) => id && CHARACTERS_BY_ID[id].cost <= bot.gold);
       if (slotIdx === -1) break;
       this.buyUnit(side, slotIdx, true);
     }
@@ -174,7 +174,7 @@ class GameRoom {
     if (this.phase !== 'prep' || !p.alive) return;
     const pokemonId = p.shop[slotIdx];
     if (!pokemonId) return;
-    const def = POKEMON_BY_ID[pokemonId];
+    const def = CHARACTERS_BY_ID[pokemonId];
     if (p.gold < def.cost) return;
     const benchIdx = p.bench.findIndex((s) => s === null);
     if (benchIdx === -1) return;
@@ -191,7 +191,7 @@ class GameRoom {
     const benchIdx = p.bench.findIndex((u) => u && u.uid === uid);
     if (benchIdx !== -1) {
       const unit = p.bench[benchIdx];
-      p.gold += POKEMON_BY_ID[unit.pokemonId].cost * unit.star;
+      p.gold += CHARACTERS_BY_ID[unit.pokemonId].cost * unit.star;
       p.bench[benchIdx] = null;
       this.broadcastState();
       return;
@@ -199,7 +199,7 @@ class GameRoom {
     const boardIdx = p.board.findIndex((u) => u.uid === uid);
     if (boardIdx !== -1) {
       const unit = p.board[boardIdx];
-      p.gold += POKEMON_BY_ID[unit.pokemonId].cost * unit.star;
+      p.gold += CHARACTERS_BY_ID[unit.pokemonId].cost * unit.star;
       p.board.splice(boardIdx, 1);
       this.broadcastState();
     }
@@ -347,13 +347,13 @@ class GameRoom {
     if (result.winner === 'A') {
       a.winStreak++; a.lossStreak = 0;
       b.lossStreak++; b.winStreak = 0;
-      const dmg = roundDamage(this.round, result.survivorsA.map((u) => ({ cost: POKEMON_BY_ID[u.pokemonId].cost, star: u.star })));
+      const dmg = roundDamage(this.round, result.survivorsA.map((u) => ({ cost: CHARACTERS_BY_ID[u.pokemonId].cost, star: u.star })));
       b.hp = Math.max(0, b.hp - dmg);
       this.lastRoundInfo = { winnerSide: 'A', damage: dmg };
     } else if (result.winner === 'B') {
       b.winStreak++; b.lossStreak = 0;
       a.lossStreak++; a.winStreak = 0;
-      const dmg = roundDamage(this.round, result.survivorsB.map((u) => ({ cost: POKEMON_BY_ID[u.pokemonId].cost, star: u.star })));
+      const dmg = roundDamage(this.round, result.survivorsB.map((u) => ({ cost: CHARACTERS_BY_ID[u.pokemonId].cost, star: u.star })));
       a.hp = Math.max(0, a.hp - dmg);
       this.lastRoundInfo = { winnerSide: 'B', damage: dmg };
     } else {

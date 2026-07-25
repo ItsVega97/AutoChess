@@ -4,7 +4,7 @@ const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { POKEMON, SYNERGIES } = require('./pokemonData');
+const { CHARACTERS, CREWS } = require('./characterData');
 const GameRoom = require('./GameRoom');
 
 const app = express();
@@ -17,8 +17,8 @@ const io = new Server(server, {
 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
-app.get('/api/pokemon', (req, res) => {
-  res.json({ pokemon: POKEMON, synergies: SYNERGIES });
+app.get('/api/units', (req, res) => {
+  res.json({ characters: CHARACTERS, crews: CREWS });
 });
 
 const rooms = new Map(); // roomId -> GameRoom

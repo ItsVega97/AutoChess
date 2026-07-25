@@ -1,6 +1,6 @@
 'use strict';
 
-const { POKEMON } = require('./pokemonData');
+const { CHARACTERS } = require('./characterData');
 
 const SHOP_ODDS = {
   1: [100, 0, 0, 0, 0],
@@ -14,8 +14,8 @@ const SHOP_ODDS = {
 };
 
 const POOL_BY_COST = {};
-for (const p of POKEMON) {
-  (POOL_BY_COST[p.cost] = POOL_BY_COST[p.cost] || []).push(p);
+for (const c of CHARACTERS) {
+  (POOL_BY_COST[c.cost] = POOL_BY_COST[c.cost] || []).push(c);
 }
 
 function levelForRound(round) {

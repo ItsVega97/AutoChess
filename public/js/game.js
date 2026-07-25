@@ -4,16 +4,16 @@
   const socket = io();
 
   // ---------------- Estado global ----------------
-  let pokemonDb = {}; // id -> data
-  let synergyDb = {}; // type -> {label icon desc}
+  let charDb = {}; // id -> personaje
+  let crewDb = {}; // crew slug -> {label icon desc}
   let mySide = null;
   let myState = null; // ultimo payload 'state'
-  let dragging = null; // { uid, origin: 'bench'|'board', fromEl }
+  let dragging = null; // { uid, origin: 'bench'|'board' }
   let ghostEl = null;
   let battleActive = false;
   let battleUnits = new Map(); // uid -> render state
-  let battleFx = []; // {type:'hit'|'chain', from, to, createdAt} / floating text
-  let battleFloats = [];
+  let battleFx = []; // lineas de impacto
+  let battleFloats = []; // textos flotantes de dano/curacion
   let battleLog = [];
   let battleIdx = 0;
   let battleStartTs = 0;
@@ -24,40 +24,18 @@
   const ctx = canvas.getContext('2d');
   const CELL = canvas.width / CELLS;
 
-  const imageCache = new Map();
-  const failedImages = new Set();
-  function getImage(url) {
-    let img = imageCache.get(url);
-    if (!img) {
-      img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = url;
-      img.onload = () => scheduleRedraw();
-      img.onerror = () => { failedImages.add(url); scheduleRedraw(); };
-      setTimeout(() => {
-        if (!(img.complete && img.naturalWidth)) { failedImages.add(url); scheduleRedraw(); }
-      }, 8000);
-      imageCache.set(url, img);
-    }
-    return img;
-  }
-
-  function markImgFallback(imgEl, pokemon) {
-    let done = false;
-    const applyFallback = () => {
-      if (done) return;
-      done = true;
-      imgEl.style.display = 'none';
-      const fallback = el('div', 'img-fallback', '🎮');
-      fallback.title = pokemon.name;
-      imgEl.parentElement.insertBefore(fallback, imgEl);
-    };
-    imgEl.addEventListener('error', applyFallback, { once: true });
-    imgEl.addEventListener('load', () => { done = true; }, { once: true });
-    setTimeout(() => {
-      if (!(imgEl.complete && imgEl.naturalWidth)) applyFallback();
-    }, 8000);
-  }
+  // Colores por tripulacion para los avatares dibujados en el tablero
+  // (los carteles del banquillo/tienda usan las mismas tonalidades via CSS).
+  const CREW_STYLE = {
+    strawhat: { fill: '#e8542f', ring: '#8a2a12' },
+    whitebeard: { fill: '#3d7dc9', ring: '#173a66' },
+    bigmom: { fill: '#e35fc0', ring: '#7a1f66' },
+    beast: { fill: '#8b5cf6', ring: '#3d1f7a' },
+    redhair: { fill: '#d1293f', ring: '#6e0f1d' },
+    blackbeard: { fill: '#5c5468', ring: '#15121c' },
+    roger: { fill: '#e8b94a', ring: '#8a6110' },
+    baroque: { fill: '#e8862f', ring: '#3a2410' },
+  };
 
   // ---------------- Utilidades UI ----------------
   function show(id) {
@@ -73,29 +51,29 @@
   }
 
   // ---------------- Carga inicial de datos ----------------
-  function loadPokemonDb(attempt = 1) {
-    fetch('/api/pokemon')
+  function loadCharDb(attempt = 1) {
+    fetch('/api/units')
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((data) => {
-        pokemonDb = Object.fromEntries(data.pokemon.map((p) => [p.id, p]));
-        synergyDb = data.synergies;
+        charDb = Object.fromEntries(data.characters.map((c) => [c.id, c]));
+        crewDb = data.crews;
         renderComboPreview();
         if (myState) { renderShop(myState.you); renderBench(myState.you); scheduleRedraw(); }
       })
       .catch((err) => {
-        console.error('No se pudieron cargar los datos de Pokémon, reintentando...', err);
-        if (attempt <= 5) setTimeout(() => loadPokemonDb(attempt + 1), 1000 * attempt);
+        console.error('No se pudieron cargar los datos de personajes, reintentando...', err);
+        if (attempt <= 5) setTimeout(() => loadCharDb(attempt + 1), 1000 * attempt);
       });
   }
-  loadPokemonDb();
+  loadCharDb();
 
   function renderComboPreview() {
     const wrap = document.getElementById('combo-icons');
     wrap.innerHTML = '';
-    for (const [type, def] of Object.entries(synergyDb)) {
+    for (const [crew, def] of Object.entries(crewDb)) {
       wrap.appendChild(el('div', 'ci', `${def.icon} ${def.label}`));
     }
   }
@@ -108,7 +86,7 @@
   let searchingName = null;
 
   document.getElementById('btn-play-online').addEventListener('click', () => {
-    const name = (nameInput.value || 'Entrenador').trim().slice(0, 16);
+    const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
     searchingOnline = true;
     searchingName = name;
@@ -123,7 +101,7 @@
   });
 
   document.getElementById('btn-play-ai').addEventListener('click', () => {
-    const name = (nameInput.value || 'Entrenador').trim().slice(0, 16);
+    const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
     socket.emit('playAI', { name });
   });
@@ -199,8 +177,8 @@
     document.getElementById('end-subtitle').textContent = draw
       ? 'La partida ha terminado en tablas.'
       : won
-      ? '¡Has arrasado la liga PokéChess!'
-      : 'Tu equipo ha caído. ¡Vuelve a intentarlo!';
+      ? '¡Te has convertido en el Rey de los Piratas!'
+      : 'Tu tripulación ha caído. ¡Vuelve a zarpar!';
     show('screen-end');
   });
 
@@ -266,6 +244,13 @@
   document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
   document.getElementById('btn-reroll').addEventListener('click', () => socket.emit('reroll'));
 
+  // ---------------- Avatares tipo "se busca" (sin imagenes externas) ----------------
+  function makeAvatarEl(p) {
+    const avatar = el('div', 'unit-avatar', p.initials);
+    if (p.captain) avatar.classList.add('captain');
+    return avatar;
+  }
+
   // ---------------- Tienda ----------------
   function renderShop(you) {
     const wrap = document.getElementById('shop');
@@ -275,15 +260,13 @@
         wrap.appendChild(el('div', 'unit-card locked', '<div style="opacity:.4;padding-top:26px">vendido</div>'));
         return;
       }
-      const p = pokemonDb[pid];
+      const p = charDb[pid];
       if (!p) return;
       const affordable = you.gold >= p.cost && you.bench.some((s) => s === null) && myState.phase === 'prep';
-      const card = el('div', `unit-card uc-type-${p.type}${affordable ? '' : ' locked'}`);
+      const card = el('div', `unit-card uc-crew-${p.crew}${p.captain ? ' captain' : ''}${affordable ? '' : ' locked'}`);
       card.appendChild(el('div', 'uc-cost', p.cost));
-      const img = el('img');
-      img.src = p.sprite;
-      markImgFallback(img, p);
-      card.appendChild(img);
+      if (p.captain) card.appendChild(el('div', 'captain-badge', '👑'));
+      card.appendChild(makeAvatarEl(p));
       card.appendChild(el('div', 'uc-name', p.name));
       card.addEventListener('click', () => {
         if (!affordable) return;
@@ -305,12 +288,9 @@
         wrap.appendChild(el('div', 'bench-slot'));
         return;
       }
-      const p = pokemonDb[unit.pokemonId];
-      const card = el('div', `bench-unit uc-type-${p.type}`);
-      const img = el('img');
-      img.src = p.sprite;
-      markImgFallback(img, p);
-      card.appendChild(img);
+      const p = charDb[unit.pokemonId];
+      const card = el('div', `bench-unit uc-crew-${p.crew}${p.captain ? ' captain' : ''}`);
+      card.appendChild(makeAvatarEl(p));
       card.appendChild(el('div', 'stars', '⭐'.repeat(unit.star)));
       card.dataset.uid = unit.uid;
       if (selectedUnit && selectedUnit.uid === unit.uid) card.classList.add('selected');
@@ -322,7 +302,7 @@
     });
   }
 
-  // ---------------- Sinergias ----------------
+  // ---------------- Sinergias (tripulaciones) ----------------
   function renderSynergies(list) {
     const wrap = document.getElementById('synergy-list');
     wrap.innerHTML = '';
@@ -332,7 +312,8 @@
       row.appendChild(el('div', 'syn-icon', s.icon));
       const info = el('div', 'syn-info');
       info.appendChild(el('div', '', `<b>${s.label}</b>`));
-      info.appendChild(el('div', 'syn-count', `${s.count} unidad(es)${s.tier ? ` · nivel ${s.tier === 4 ? 'II' : 'I'}` : ''}`));
+      const tierLabel = s.tier === 5 ? ' · ¡TRIPULACIÓN COMPLETA!' : s.tier ? ` · nivel ${s.tier === 4 ? 'II' : 'I'}` : '';
+      info.appendChild(el('div', 'syn-count', `${s.count}/5${tierLabel}`));
       row.appendChild(info);
       row.title = s.desc;
       wrap.appendChild(row);
@@ -342,8 +323,8 @@
   // ---------------- Tooltip ----------------
   const tooltip = document.getElementById('tooltip');
   function showTooltip(e, p, star) {
-    tooltip.innerHTML = `<h4>${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
-      <div class="row"><span>Tipo</span><span>${synergyDb[p.type]?.icon || ''} ${synergyDb[p.type]?.label || p.type}</span></div>
+    tooltip.innerHTML = `<h4>${p.captain ? '👑 ' : ''}${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
+      <div class="row"><span>Tripulación</span><span>${crewDb[p.crew]?.icon || ''} ${crewDb[p.crew]?.label || p.crew}</span></div>
       <div class="row"><span>Coste</span><span>${p.cost} 🪙</span></div>
       <div class="row"><span>Vida</span><span>${p.hp}</span></div>
       <div class="row"><span>Ataque</span><span>${p.atk}</span></div>
@@ -398,10 +379,9 @@
       if (!p) return;
       dragging = { uid: pointerStart.uid, origin: pointerStart.origin };
       setSelected(null, null);
+      const charInfo = charDb[p.pokemonId];
       ghostEl = el('div', 'drag-ghost');
-      const img = el('img');
-      img.src = pokemonDb[p.pokemonId].sprite;
-      ghostEl.appendChild(img);
+      ghostEl.appendChild(makeAvatarEl(charInfo));
       document.body.appendChild(ghostEl);
     }
     if (dragging) {
@@ -552,15 +532,19 @@
         ctx.stroke();
         ctx.restore();
       }
-      drawUnitSprite(unit.pokemonId, unit.star, col * CELL + CELL / 2, row * CELL + CELL / 2, null, 0, null);
+      drawUnitAvatar(unit.pokemonId, unit.star, col * CELL + CELL / 2, row * CELL + CELL / 2, null, 0, null);
     }
   }
 
-  function drawUnitSprite(pokemonId, star, cx, cy, hpFrac, shieldFrac, sideColor, scale = 1) {
-    const p = pokemonDb[pokemonId];
+  // Dibuja el "cartel de se busca" de un personaje directamente en el
+  // canvas: circulo con el color de su tripulacion, iniciales y, si es
+  // capitan, una corona y un anillo dorado. No depende de ninguna imagen
+  // externa, asi que nunca se rompe por red.
+  function drawUnitAvatar(pokemonId, star, cx, cy, hpFrac, shieldFrac, sideColor, scale = 1) {
+    const p = charDb[pokemonId];
     if (!p) return;
     const size = CELL * 0.82 * scale;
-    const img = getImage(p.sprite);
+    const style = CREW_STYLE[p.crew] || { fill: '#26407a', ring: '#0e2140' };
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(cx, cy + size * 0.36, size * 0.32, size * 0.11, 0, 0, Math.PI * 2);
@@ -574,22 +558,27 @@
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    if (img.complete && img.naturalWidth && !failedImages.has(img.src)) {
-      ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
-    } else {
-      ctx.beginPath();
-      ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#26407a';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.font = `${Math.round(size * 0.5)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(synergyDb[p.type]?.icon || '🎮', cx, cy + 1);
-      ctx.textBaseline = 'alphabetic';
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = style.fill;
+    ctx.fill();
+    ctx.lineWidth = p.captain ? 4 : 2;
+    ctx.strokeStyle = p.captain ? '#ffd23f' : style.ring;
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = `900 ${Math.round(size * 0.3)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.initials, cx, cy + 1);
+    ctx.textBaseline = 'alphabetic';
+
+    if (p.captain) {
+      ctx.font = `${Math.round(size * 0.36)}px sans-serif`;
+      ctx.fillText('👑', cx, cy - size * 0.38);
     }
+
     if (star) {
       ctx.font = `${Math.round(size * 0.2)}px sans-serif`;
       ctx.textAlign = 'center';
@@ -724,7 +713,7 @@
       const alpha = u.alive ? 1 : Math.max(0, 1 - (now - u.deathAt) / 500);
       ctx.save();
       ctx.globalAlpha = alpha;
-      drawUnitSprite(u.pokemonId, u.star, cx, cy, u.hp / u.maxHp, u.shield > 0 ? u.shield / (u.maxShield || 1) : 0, u.side === 'A' ? 'rgba(90,255,140,1)' : 'rgba(255,90,90,1)');
+      drawUnitAvatar(u.pokemonId, u.star, cx, cy, u.hp / u.maxHp, u.shield > 0 ? u.shield / (u.maxShield || 1) : 0, u.side === 'A' ? 'rgba(90,255,140,1)' : 'rgba(255,90,90,1)');
       ctx.restore();
     }
 

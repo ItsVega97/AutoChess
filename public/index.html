@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>PokéChess Royale</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>" />
+<title>Nakama Royale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏴‍☠️</text></svg>" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -12,10 +12,10 @@
 <!-- ================= PANTALLA DE INICIO ================= -->
 <section id="screen-menu" class="screen active">
   <div class="menu-card">
-    <h1 class="logo">Poké<span>Chess</span> Royale</h1>
-    <p class="subtitle">Autobattler online al estilo Tactics Royale</p>
+    <h1 class="logo">Nakama<span> Royale</span></h1>
+    <p class="subtitle">Autobattler pirata online al estilo Tactics Royale</p>
 
-    <input id="input-name" maxlength="16" placeholder="Tu nombre de entrenador" />
+    <input id="input-name" maxlength="16" placeholder="Tu nombre de pirata" />
 
     <button id="btn-play-online" class="btn btn-primary">⚔️ Jugar Online (1v1)</button>
     <button id="btn-play-ai" class="btn btn-secondary">🤖 Jugar vs CPU (demo instantánea)</button>
@@ -27,7 +27,7 @@
     </div>
 
     <div class="combos-preview">
-      <p class="combos-title">8 combos de tipo</p>
+      <p class="combos-title">8 tripulaciones piratas</p>
       <div id="combo-icons" class="combo-icons"></div>
     </div>
   </div>
@@ -36,7 +36,7 @@
 <!-- ================= PANTALLA DE CARGA ================= -->
 <section id="screen-loading" class="screen">
   <div class="menu-card">
-    <h1 class="logo">Poké<span>Chess</span> Royale</h1>
+    <h1 class="logo">Nakama<span> Royale</span></h1>
     <div class="loading-block">
       <div class="spinner spinner-big"></div>
       <p class="loading-text">¡Rival encontrado! Cargando partida...</p>
@@ -70,7 +70,7 @@
 
   <main class="game-main">
     <aside class="side-panel synergies-panel">
-      <h3>Combos activos</h3>
+      <h3>Tripulaciones activas</h3>
       <div id="synergy-list" class="synergy-list"></div>
     </aside>
 
@@ -82,8 +82,8 @@
       <h3>Acciones</h3>
       <button id="btn-reroll" class="btn btn-secondary btn-small">🎲 Reroll (2 🪙)</button>
       <button id="btn-ready" class="btn btn-primary btn-small">✅ Listo</button>
-      <div class="sell-zone" id="sell-zone">🗑️ Suelta aquí para vender</div>
-      <p class="hint">Toca una criatura y luego una casilla del tablero para colocarla (o arrástrala). 2 copias iguales = fusión ⭐, hasta ⭐⭐⭐⭐</p>
+      <div class="sell-zone" id="sell-zone">🗑️ Vender</div>
+      <p class="hint">Toca un personaje y luego una casilla del tablero para colocarlo (o arrástralo). 2 copias iguales = fusión ⭐, hasta ⭐⭐⭐⭐</p>
     </aside>
   </main>
 

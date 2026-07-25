@@ -1,6 +1,6 @@
 'use strict';
 
-const { POKEMON_BY_ID, SYNERGIES, STAR_MULT } = require('./pokemonData');
+const { CHARACTERS_BY_ID, CREWS, STAR_MULT } = require('./characterData');
 
 const TICK_MS = 150;
 const MAX_TICKS = 160; // ~24s
@@ -11,13 +11,13 @@ const BOARD_ROWS = 8;
 function computeSynergies(board) {
   const counts = {};
   for (const u of board) {
-    const p = POKEMON_BY_ID[u.pokemonId];
-    counts[p.type] = (counts[p.type] || 0) + 1;
+    const p = CHARACTERS_BY_ID[u.pokemonId];
+    counts[p.crew] = (counts[p.crew] || 0) + 1;
   }
-  const active = {}; // type -> merged bonus object
+  const active = {}; // crew -> merged bonus object
   const summary = []; // for UI
-  for (const [type, count] of Object.entries(counts)) {
-    const def = SYNERGIES[type];
+  for (const [crew, count] of Object.entries(counts)) {
+    const def = CREWS[crew];
     if (!def) continue;
     let tierHit = 0;
     let bonus = {};
@@ -28,10 +28,10 @@ function computeSynergies(board) {
       }
     }
     if (tierHit > 0) {
-      active[type] = bonus;
-      summary.push({ type, label: def.label, icon: def.icon, desc: def.desc, count, tier: tierHit });
+      active[crew] = bonus;
+      summary.push({ type: crew, label: def.label, icon: def.icon, desc: def.desc, count, tier: tierHit });
     } else {
-      summary.push({ type, label: def.label, icon: def.icon, desc: def.desc, count, tier: 0 });
+      summary.push({ type: crew, label: def.label, icon: def.icon, desc: def.desc, count, tier: 0 });
     }
   }
   return { active, summary };
@@ -39,13 +39,13 @@ function computeSynergies(board) {
 
 function instantiateTeam(board, side, synergyActive) {
   return board.map((u, idx) => {
-    const p = POKEMON_BY_ID[u.pokemonId];
+    const p = CHARACTERS_BY_ID[u.pokemonId];
     const starMult = STAR_MULT[u.star] || 1;
-    const typeBonus = synergyActive[p.type] || {};
-    const allMult = typeBonus.allMult || 1;
-    const hp = Math.round(p.hp * starMult * (typeBonus.hpMult || 1) * allMult);
-    const atk = Math.round(p.atk * starMult * (typeBonus.atkMult || 1) * allMult);
-    const def = Math.round(p.def * starMult * (typeBonus.defMult || 1) * allMult);
+    const crewBonus = synergyActive[p.crew] || {};
+    const allMult = crewBonus.allMult || 1;
+    const hp = Math.round(p.hp * starMult * (crewBonus.hpMult || 1) * allMult);
+    const atk = Math.round(p.atk * starMult * (crewBonus.atkMult || 1) * allMult);
+    const def = Math.round(p.def * starMult * (crewBonus.defMult || 1) * allMult);
     let x = u.x;
     let y = u.y;
     // side B (top of arena) occupies rows 0-3 as-is; side A (bottom) mirrored to rows 4-7
@@ -57,8 +57,9 @@ function instantiateTeam(board, side, synergyActive) {
       side,
       pokemonId: p.id,
       name: p.name,
-      type: p.type,
+      type: p.crew,
       star: u.star,
+      captain: !!p.captain,
       x,
       y,
       hp,
@@ -66,17 +67,17 @@ function instantiateTeam(board, side, synergyActive) {
       atk,
       def,
       range: p.range,
-      atkSpeed: Math.round(p.atkSpeed / (typeBonus.speedMult || 1)),
-      shieldMax: Math.round(hp * (typeBonus.shieldPct || 0)),
-      shield: Math.round(hp * (typeBonus.shieldPct || 0)),
-      regenPct: typeBonus.regenPct || 0,
-      dodgeChance: typeBonus.dodgeChance || 0,
-      chainChance: typeBonus.chainChance || 0,
-      chainPct: typeBonus.chainPct || 0,
-      stunChance: typeBonus.stunChance || 0,
-      burnPct: typeBonus.burnPct || 0,
-      burnTicks: typeBonus.burnTicks || 0,
-      healOnKillPct: typeBonus.healOnKillPct || 0,
+      atkSpeed: Math.round(p.atkSpeed / (crewBonus.speedMult || 1)),
+      shieldMax: Math.round(hp * (crewBonus.shieldPct || 0)),
+      shield: Math.round(hp * (crewBonus.shieldPct || 0)),
+      regenPct: crewBonus.regenPct || 0,
+      dodgeChance: crewBonus.dodgeChance || 0,
+      chainChance: crewBonus.chainChance || 0,
+      chainPct: crewBonus.chainPct || 0,
+      stunChance: crewBonus.stunChance || 0,
+      burnPct: crewBonus.burnPct || 0,
+      burnTicks: crewBonus.burnTicks || 0,
+      healOnKillPct: crewBonus.healOnKillPct || 0,
       burnStacks: [], // {remaining, dmgPerTick}
       stunnedUntil: -1,
       lastAttackTick: -999,
@@ -141,7 +142,10 @@ function simulateBattle(boardA, boardB) {
 
   const log = [];
   for (const u of all) {
-    log.push({ t: 0, type: 'spawn', uid: u.uid, side: u.side, pokemonId: u.pokemonId, name: u.name, type: u.type, star: u.star, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, shield: u.shield });
+    // OJO: no reutilizar la clave "type" aqui dentro (ya es el tipo de evento
+    // 'spawn'); antes se pisaba con el tipo/tripulacion del personaje y los
+    // eventos de aparicion nunca se reconocian en el cliente.
+    log.push({ t: 0, type: 'spawn', uid: u.uid, side: u.side, pokemonId: u.pokemonId, name: u.name, star: u.star, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, shield: u.shield });
   }
 
   let winner = 'draw';
