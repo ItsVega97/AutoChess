@@ -149,6 +149,8 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .hud-name { font-size: 13px; font-weight: 800; }
 .hud-hp b { color: var(--hp); }
 .hud-gold b { color: var(--gold); }
+/* Cupo de tropas: se pone en ambar cuando ya no cabe ninguna mas */
+.hud-level b.lleno { color: var(--gold); }
 .hud-center { text-align: center; min-width: 84px; }
 .hud-phase { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; opacity: .85; }
 .hud-timer { font-size: 22px; font-weight: 900; line-height: 1.05; color: var(--gold); text-shadow: 0 2px 4px rgba(0,0,0,.9); }

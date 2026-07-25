@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
-const { levelForRound, boardCapacityForLevel, rollShop, goldIncome, roundDamage } = require('./economy');
+const { teamSizeForRound, shopTierForRound, rollShop, goldIncome, roundDamage, SHOP_SIZE } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 
 const PREP_MS = 30000;
@@ -27,10 +27,11 @@ function newPlayer(id, name, isBot) {
     hp: START_HP,
     gold: START_GOLD,
     round: 0,
-    level: 1,
+    maxTeam: 1,   // cuantas tropas caben en la cubierta: +1 por combate, hasta 6
+    shopTier: 1,  // calidad de la tienda, sube por su cuenta cada dos rondas
     winStreak: 0,
     lossStreak: 0,
-    shop: [null, null, null, null, null],
+    shop: new Array(SHOP_SIZE).fill(null),
     bench: new Array(BENCH_SIZE).fill(null),
     board: [], // {uid,pokemonId,star,x,y}
     alive: true,
@@ -108,8 +109,9 @@ class GameRoom {
       const p = this.players[side];
       if (!p.alive) continue;
       p.round = this.round;
-      p.level = levelForRound(this.round);
-      p.shop = rollShop(p.level);
+      p.maxTeam = teamSizeForRound(this.round);
+      p.shopTier = shopTierForRound(this.round);
+      p.shop = rollShop(p.shopTier);
       p.ready = false;
       const streak = Math.max(p.winStreak, p.lossStreak);
       if (this.round > 1) p.gold += goldIncome(p.gold, streak);
@@ -148,7 +150,7 @@ class GameRoom {
       this.buyUnit(side, slotIdx, true);
     }
     // Place bench units onto the board up to capacity
-    const cap = boardCapacityForLevel(bot.level);
+    const cap = bot.maxTeam;
     for (let i = 0; i < bot.bench.length && bot.board.length < cap; i++) {
       const unit = bot.bench[i];
       if (!unit) continue;
@@ -182,7 +184,9 @@ class GameRoom {
     if (benchIdx === -1) return;
     p.gold -= def.cost;
     p.bench[benchIdx] = { uid: this.nextUid(), pokemonId, star: 1 };
-    p.shop[slotIdx] = null;
+    // Al estilo Tactics Royale: comprar renueva la tienda entera, no deja el
+    // hueco vacio. La tirada es gratis, el reroll manual sigue costando oro.
+    p.shop = rollShop(p.shopTier);
     this.runMerges(p);
     if (!skipEmit) this.broadcastState();
   }
@@ -218,7 +222,7 @@ class GameRoom {
 
     let unit;
     if (benchIdx !== -1) {
-      const cap = boardCapacityForLevel(p.level);
+      const cap = p.maxTeam;
       if (occupantIdx === -1 && p.board.length >= cap) return;
       unit = p.bench[benchIdx];
       p.bench[benchIdx] = null;
@@ -267,7 +271,7 @@ class GameRoom {
     if (this.phase !== 'prep' || !p.alive) return;
     if (p.gold < 2) return;
     p.gold -= 2;
-    p.shop = rollShop(p.level);
+    p.shop = rollShop(p.shopTier);
     if (!skipEmit) this.broadcastState();
   }
 
@@ -401,7 +405,7 @@ class GameRoom {
       name: p.name,
       hp: p.hp,
       gold: p.gold,
-      level: p.level,
+      maxTeam: p.maxTeam,
       round: p.round,
       winStreak: p.winStreak,
       lossStreak: p.lossStreak,
@@ -427,7 +431,7 @@ class GameRoom {
         opponent: {
           name: this.players[this.other(side)].name,
           hp: this.players[this.other(side)].hp,
-          level: this.players[this.other(side)].level,
+          maxTeam: this.players[this.other(side)].maxTeam,
           alive: this.players[this.other(side)].alive,
           ready: this.players[this.other(side)].ready,
         },

@@ -56,12 +56,19 @@ arranque `npm start` y puerto por `process.env.PORT`).
 1. **Fase de preparación (30s)**: compra personajes en la tienda, tócalos para
    seleccionarlos y luego toca una casilla de tu mitad de la cubierta para
    colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
+   La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
+   uno**, así que comprar nunca deja huecos vacíos; el reroll manual (2🪙) sigue
+   estando para cuando no te gusta ninguno.
 2. **Combate automático**: tu tripulación lucha sola contra la del rival, con la
    formación exacta en la que la colocaste. Gana quien deje unidades vivas; el
    perdedor pierde vida según lo que sobrevivió al ganador.
-3. Sube de nivel automáticamente cada ronda (más oro, tienda con personajes más
-   fuertes, más hueco en la cubierta) hasta que uno de los dos jugadores llega a 0
-   de sus 20 puntos de vida.
+3. **Cupo de tropas**: empiezas pudiendo desplegar **una sola tropa**, y ganas un
+   hueco después de cada combate hasta un máximo de **6**. El marcador de arriba
+   (⚔️ 3/4) dice cuántas llevas en cubierta y cuántas te caben; no es un nivel.
+   Con el cupo lleno solo puedes cambiar una tropa por otra del banquillo.
+   La tienda mejora por su cuenta cada dos rondas (personajes más caros y
+   capitanes), y la partida acaba cuando uno de los dos llega a 0 de sus 20
+   puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 5. **Habilidades**: cada personaje llena su barra de maná (azul, debajo de la de
@@ -120,9 +127,10 @@ Para sustituir la de un personaje por un **modelo 3D real**, deja su archivo en
 No hay que tocar código: el servidor publica en `/api/models` los modelos que
 encuentra y el juego carga solo esos, dejando la ficha con el retrato para los
 personajes que aún no lo tengan. Cada modelo se reescala a la altura de la
-casilla, se centra, se orienta hacia el bando contrario y conserva encima sus
-estrellas y sus barras de vida y maná. Si trae animaciones se reproduce la
-primera en bucle.
+casilla, se centra y se orienta hacia el bando contrario. Un personaje con
+modelo pierde la peana y el cartel: se queda su sombra, una chapita con su
+nombre y sus estrellas encima de la cabeza, y las barras de vida y maná durante
+el combate. Si trae animaciones se reproduce la primera en bucle.
 
 El formato que necesita el juego es **`.glb`** (glTF binario), a poder ser de
 bajo poligonaje (unos pocos miles de triángulos) y en pose neutra. Dónde
@@ -143,7 +151,8 @@ completa de nombres de archivo por tripulación.
 
 - `server/characterData.js` — roster de 40 personajes (con su habilidad y coste
   de maná) y definición de los 8 combos.
-- `server/economy.js` — tienda, probabilidades por nivel, oro, ingresos y daño.
+- `server/economy.js` — tienda (4 huecos), probabilidades por ronda, cupo de
+  tropas, oro, ingresos y daño.
 - `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista
   sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
   quemaduras, escudos...) que el cliente reproduce para animar el combate igual

@@ -258,6 +258,7 @@ import { createScene } from './scene3d.js';
 
   function renderState(payload) {
     myState = payload;
+    window.__estadoTest = payload; // ultimo estado recibido, para las pruebas
     if (!enteredGame) {
       enteredGame = true;
       show('screen-game');
@@ -268,9 +269,13 @@ import { createScene } from './scene3d.js';
     document.getElementById('hud-timer').textContent = Math.max(0, Math.ceil(payload.timeLeft / 1000));
     document.getElementById('hud-my-hp').textContent = payload.you.hp;
     document.getElementById('hud-my-gold').textContent = payload.you.gold;
-    document.getElementById('hud-my-level').textContent = payload.you.level;
+    // Ya no hay "nivel": lo que se indica es cuantas tropas caben en cubierta,
+    // en plan "3/4" = tres colocadas de las cuatro que puedes llevar.
+    const cupo = document.getElementById('hud-my-level');
+    cupo.textContent = `${payload.you.board.length}/${payload.you.maxTeam}`;
+    cupo.classList.toggle('lleno', payload.you.board.length >= payload.you.maxTeam);
     document.getElementById('hud-opp-hp').textContent = payload.opponent.hp;
-    document.getElementById('hud-opp-level').textContent = payload.opponent.level;
+    document.getElementById('hud-opp-level').textContent = payload.opponent.maxTeam;
 
     renderShop(payload.you);
     renderBench(payload.you);
@@ -515,10 +520,16 @@ import { createScene } from './scene3d.js';
   // Casillas libres de tu mitad, resaltadas al tener una ficha seleccionada
   function highlightCells() {
     if (!selectedUnit || !myState) return [];
+    // Con el cupo de tropas lleno ya no se puede meter otra desde el banquillo:
+    // lo unico que queda es cambiarla por una de las que ya estan, asi que se
+    // resaltan esas en vez de los huecos vacios.
+    const lleno = selectedUnit.origin === 'bench'
+      && myState.you.board.length >= myState.you.maxTeam;
     const out = [];
     for (let y = 0; y < rowsPerPlayer; y++) {
       for (let x = 0; x < boardCols; x++) {
-        if (myState.you.board.some((u) => u.x === x && u.y === y)) continue;
+        const ocupada = myState.you.board.some((u) => u.x === x && u.y === y);
+        if (ocupada !== lleno) continue;
         out.push(prepToRender(x, y));
       }
     }
