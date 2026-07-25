@@ -227,24 +227,47 @@ export function createScene(container) {
   }
 
   // ---------------- Camara ----------------
+  // Franjas de pantalla tapadas por la interfaz superpuesta (HUD arriba,
+  // tienda abajo). El tablero se encuadra en el hueco que queda libre.
+  let insetTop = 0;
+  let insetBottom = 0;
+  function setInsets(top, bottom) {
+    insetTop = top || 0;
+    insetBottom = bottom || 0;
+    placeCamera();
+  }
+
   // Vista en angulo desde detras de tu mitad, estilo Tactics Royale.
-  // La distancia se calcula para que el tablero llene la pantalla tanto en
+  // La distancia se calcula para que el tablero llene el hueco visible tanto en
   // moviles (altos y estrechos) como en escritorio (anchos y bajos).
   function placeCamera() {
     const boardW = cols * TILE;
     const boardD = rows * TILE;
     const fov = (camera.fov * Math.PI) / 180;
-    const aspect = camera.aspect || 1.6;
+    const w = renderer.domElement.clientWidth || 1;
+    const h = renderer.domElement.clientHeight || 1;
 
-    const halfW = boardW / 2 + 1.6;          // margen lateral para el casco
-    const halfH = (boardD / 2 + 1.3) * 0.92; // el tablero se ve escorzado
-    const needed = Math.max(halfH, halfW / aspect);
-    const dist = needed / Math.tan(fov / 2);
+    // Alto realmente disponible una vez descontada la interfaz
+    const freeH = Math.max(120, h - insetTop - insetBottom);
+    const freeAspect = w / freeH;
 
-    // Un angulo mas bajo deja ver el mastil, la vela y la linea del horizonte
+    const halfW = boardW / 2 + 1.4;          // margen lateral para el casco
+    const halfH = (boardD / 2 + 1.2) * 0.92; // el tablero se ve escorzado
+    const needed = Math.max(halfH, halfW / freeAspect);
+    // El encuadre se calcula sobre freeH pero se renderiza en h: hay que
+    // compensar para que el tablero conserve el tamano pensado.
+    const dist = (needed / Math.tan(fov / 2)) * (h / freeH);
+
     const pitch = (44 * Math.PI) / 180;
     camera.position.set(0, Math.sin(pitch) * dist, Math.cos(pitch) * dist + boardD * 0.12);
     camera.lookAt(0, 1.1, -0.5);
+
+    // Desplaza el encuadre para centrarlo en el hueco libre en vez de en el
+    // centro del lienzo, asi la cubierta no queda debajo de la tienda.
+    const centroLibre = insetTop + freeH / 2;
+    const desplazamiento = centroLibre - h / 2;
+    camera.setViewOffset(w, h, 0, -desplazamiento, w, h);
+    camera.updateProjectionMatrix();
   }
 
   function setBoard(nextCols, nextRows) {
@@ -630,7 +653,7 @@ export function createScene(container) {
   window.addEventListener('resize', resize);
 
   return {
-    setBoard, syncUnits, setHighlights, pickCell,
+    setBoard, syncUnits, setHighlights, pickCell, setInsets,
     addFloatingText, addAttackBeam, addAbilityBurst, resize, dispose,
     get cols() { return cols; },
     get rows() { return rows; },

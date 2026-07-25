@@ -31,8 +31,22 @@ import { createScene } from './scene3d.js';
   function syncAppHeight() {
     const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
-    if (scene) scene.resize();
+    if (scene) {
+      scene.resize();
+      syncSceneInsets();
+    }
     if (!tooltipHidden()) placeInfoPanel();
+  }
+
+  // Le dice a la escena cuanto ocupan el HUD y la barra inferior para que
+  // encuadre la cubierta en el hueco libre y no quede tapada por la tienda.
+  function syncSceneInsets() {
+    if (!scene) return;
+    const hud = document.querySelector('.hud');
+    const bottom = document.querySelector('.bottom-ui');
+    const top = hud ? hud.getBoundingClientRect().height : 0;
+    const bot = bottom ? bottom.getBoundingClientRect().height : 0;
+    scene.setInsets(top, bot);
   }
   function tooltipHidden() {
     const t = document.getElementById('tooltip');
@@ -251,10 +265,16 @@ import { createScene } from './scene3d.js';
     renderShop(payload.you);
     renderBench(payload.you);
     renderSynergies(payload.you.synergies);
+    // el alto de la barra inferior cambia al llenarse la tienda o el banquillo
+    syncSceneInsets();
 
     const readyBtn = document.getElementById('btn-ready');
     readyBtn.disabled = payload.phase !== 'prep' || payload.you.ready;
-    readyBtn.textContent = payload.you.ready ? '⏳ Esperando...' : '✅ Listo';
+    // Mantenemos el <span class="lbl"> porque en movil se oculta para dejar el
+    // boton solo con el icono y que quepa mas banquillo.
+    readyBtn.innerHTML = payload.you.ready
+      ? '⏳ <span class="lbl">Esperando</span>'
+      : '✅ <span class="lbl">Listo</span>';
     document.getElementById('btn-reroll').disabled = payload.phase !== 'prep' || payload.you.gold < 2;
 
     const banner = document.getElementById('battle-banner');
@@ -423,15 +443,18 @@ import { createScene } from './scene3d.js';
     placeInfoPanel();
   }
 
-  // Lo colocamos sobre el tablero 3D, que es donde sobra sitio
+  // Lo colocamos en el hueco libre entre el HUD y la barra inferior,
+  // pegado a la derecha para no tapar la lista de tripulaciones.
   function placeInfoPanel() {
-    const board = document.querySelector('.board-wrap');
-    if (!board) return;
-    const b = board.getBoundingClientRect();
+    const hud = document.querySelector('.hud');
+    const bottom = document.querySelector('.bottom-ui');
+    const top = hud ? hud.getBoundingClientRect().height : 0;
+    const bot = bottom ? bottom.getBoundingClientRect().height : 0;
     const r = tooltip.getBoundingClientRect();
     const pad = 8;
-    const x = Math.max(pad, Math.min(b.left + pad, window.innerWidth - r.width - pad));
-    const y = Math.max(pad, Math.min(b.top + pad, window.innerHeight - r.height - pad));
+    const maxTop = window.innerHeight - bot - r.height - pad;
+    const x = Math.max(pad, window.innerWidth - r.width - pad);
+    const y = Math.max(pad, Math.min(top + pad, Math.max(pad, maxTop)));
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
   }
@@ -695,6 +718,11 @@ import { createScene } from './scene3d.js';
     try {
       scene = createScene(container);
       scene.setBoard(boardCols, boardRows);
+      syncSceneInsets();
+      // Utilidad para las pruebas automaticas: comprobar que casilla cae bajo
+      // un punto de la pantalla (sirve para verificar que el tablero entero
+      // queda visible y no debajo de la interfaz).
+      window.__pickCellForTest = (x, y) => scene.pickCell(x, y);
     } catch (err) {
       console.error('No se pudo iniciar la escena 3D:', err);
       container.innerHTML = '<div class="webgl-error">Tu navegador no ha podido iniciar el modo 3D (WebGL).</div>';

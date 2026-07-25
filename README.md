@@ -10,6 +10,10 @@ El combate se juega sobre la **cubierta 3D de un barco pirata** renderizada con
 Three.js, con un tablero compacto de 5x3 casillas por jugador y 20 puntos de vida
 cada uno — partidas rápidas, de unas 8-14 rondas.
 
+La escena 3D ocupa toda la pantalla y la interfaz va **superpuesta** encima
+(estilo Tactics Royale), de modo que la partida entra siempre en una sola
+pantalla de móvil sin necesidad de desplazarse.
+
 ## Cómo jugar (local)
 
 ```bash
@@ -138,7 +142,9 @@ Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
   combate / resultado), tienda, banquillo, fusiones, IA del bot, reconexión.
 - `server/index.js` — servidor Express + Socket.io, cola de emparejamiento.
 - `public/js/scene3d.js` — toda la escena 3D (Three.js): barco, mar, casillas,
-  fichas, efectos de combate y selección de casilla por raycasting.
+  fichas, efectos de combate y selección de casilla por raycasting. La cámara
+  encuadra la cubierta en el hueco libre entre el HUD y la barra inferior
+  (`setInsets`), así la interfaz superpuesta nunca tapa el tablero.
 - `public/js/game.js` — sockets, interfaz 2D (tienda, banquillo, HUD) y la
   traducción entre las coordenadas del servidor y las de la escena.
 - `public/vendor/` — Three.js incluido en el repo (ver el README de esa carpeta).

@@ -106,145 +106,132 @@ body.in-game { overflow: hidden; height: var(--app-height, 100dvh); }
 .combo-icons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .combo-icons .ci { background: var(--panel-light); border-radius: 10px; padding: 6px 9px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
 
-/* ---------- Pantalla de partida a pantalla completa (sin scroll de pagina) ---------- */
+/* ---------- Pantalla de partida ----------
+   La escena 3D es el fondo a pantalla completa y la interfaz va superpuesta,
+   como en Tactics Royale. Al no ocupar sitio en el flujo, el tablero siempre
+   se ve entero pase lo que pase con las barras del navegador. */
 #screen-game.active {
-  display: flex;
-  flex-direction: column;
+  display: block;
   position: fixed;
   inset: 0;
   height: var(--app-height, 100dvh);
   overflow: hidden;
 }
 
-/* ---------- HUD ---------- */
-.hud {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px;
-  background: linear-gradient(180deg, #0e2140, #163158);
-  border-bottom: 3px solid #050f22;
-}
-.hud-player { display: flex; gap: 10px; align-items: center; font-size: 13px; font-weight: 700; }
-.hud-player.opp { text-align: right; flex-direction: row-reverse; }
-.hud-name { font-size: 14px; font-weight: 800; }
-.hud-hp b { color: var(--hp); }
-.hud-gold b { color: var(--gold); }
-.hud-center { text-align: center; min-width: 140px; }
-.hud-phase { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
-.hud-timer { font-size: 26px; font-weight: 900; line-height: 1; color: var(--gold); }
-.hud-round { font-size: 11px; opacity: .8; }
-
-.battle-banner {
-  flex: 0 0 auto;
-  text-align: center;
-  padding: 10px;
-  font-weight: 900;
-  font-size: 18px;
-  background: linear-gradient(90deg, rgba(255,210,63,0), rgba(255,210,63,.9), rgba(255,210,63,0));
-  color: #201400;
-}
-.battle-banner.hidden { display: none; }
-
-/* ---------- Layout principal ---------- */
-.game-main {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  gap: 10px;
-  padding: 8px 10px;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
-.side-panel {
-  background: rgba(12, 30, 58, .7);
-  border-radius: 14px;
-  padding: 12px;
-  width: 190px;
-  flex: 0 0 auto;
-  max-height: 100%;
-  overflow-y: auto;
-  border: 2px solid rgba(255,255,255,.1);
-}
-.side-panel h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; opacity: .85; }
-
-.synergy-list { display: flex; flex-direction: column; gap: 6px; }
-.syn-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.04); font-size: 12px; opacity: .55; }
-.syn-row.active { opacity: 1; background: linear-gradient(90deg, rgba(255,210,63,.25), rgba(255,210,63,.05)); box-shadow: inset 0 0 0 1px rgba(255,210,63,.5); }
-.syn-icon { font-size: 16px; }
-.syn-info { display: flex; flex-direction: column; line-height: 1.2; }
-.syn-count { font-size: 10px; opacity: .8; }
-
-.board-wrap {
-  background: #0d2b45;
-  border-radius: 16px;
-  border: 3px solid #071a2c;
-  box-shadow: 0 10px 30px rgba(0,0,0,.4);
-  overflow: hidden;
-  height: 100%;
-  width: 100%;
-  max-width: 900px;
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-#board-3d { width: 100%; height: 100%; touch-action: none; }
+#board-3d { position: absolute; inset: 0; touch-action: none; }
 #board-3d canvas { display: block; width: 100%; height: 100%; }
 .webgl-error { padding: 24px; text-align: center; font-size: 14px; opacity: .85; }
 
-.actions-panel .btn { margin-bottom: 8px; }
-.sell-zone {
-  margin-top: 10px;
-  padding: 14px 8px;
-  text-align: center;
-  border: 2px dashed rgba(255,120,120,.6);
-  border-radius: 10px;
-  font-size: 12px;
-  color: #ffb0b0;
-}
-.sell-zone.drop-hover { background: rgba(255,80,80,.25); }
-.hint { font-size: 11px; opacity: .7; margin-top: 12px; line-height: 1.4; }
+.ui-layer { position: absolute; z-index: 5; }
 
-/* ---------- Banquillo / tienda ---------- */
-.bench-panel, .shop-panel {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  box-sizing: border-box;
+/* ---------- HUD superpuesto ---------- */
+.hud {
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, rgba(8,20,40,.92), rgba(8,20,40,.55) 75%, rgba(8,20,40,0));
+  pointer-events: none;
 }
-.bench-panel h3, .shop-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; opacity: .85; margin: 0 0 4px; }
-.shop-hint { font-weight: 400; opacity: .6; text-transform: none; letter-spacing: 0; }
+.hud-player { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 700; text-shadow: 0 2px 3px rgba(0,0,0,.8); }
+.hud-player.opp { text-align: right; flex-direction: row-reverse; }
+.hud-name { font-size: 13px; font-weight: 800; }
+.hud-hp b { color: var(--hp); }
+.hud-gold b { color: var(--gold); }
+.hud-center { text-align: center; min-width: 84px; }
+.hud-phase { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; opacity: .85; }
+.hud-timer { font-size: 22px; font-weight: 900; line-height: 1.05; color: var(--gold); text-shadow: 0 2px 4px rgba(0,0,0,.9); }
+.hud-round { font-size: 10px; opacity: .85; }
+
+.battle-banner {
+  top: 58px; left: 0; right: 0;
+  text-align: center;
+  padding: 7px;
+  font-weight: 900;
+  font-size: 15px;
+  background: linear-gradient(90deg, rgba(255,210,63,0), rgba(255,210,63,.92), rgba(255,210,63,0));
+  color: #201400;
+  pointer-events: none;
+}
+.battle-banner.hidden { display: none; }
+
+/* ---------- Tripulaciones: columna compacta a la izquierda ---------- */
+.synergies-panel {
+  left: 6px;
+  top: 62px;
+  max-height: 48%;
+  overflow-y: auto;
+  max-width: 42%;
+}
+.synergy-list { display: flex; flex-direction: column; gap: 4px; }
+.syn-row {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 7px; border-radius: 8px;
+  background: rgba(8,20,40,.7);
+  font-size: 11px; opacity: .62;
+  border: 1px solid rgba(255,255,255,.12);
+}
+.syn-row.active { opacity: 1; background: linear-gradient(90deg, rgba(255,210,63,.32), rgba(8,20,40,.8)); border-color: rgba(255,210,63,.6); }
+.syn-icon { font-size: 15px; }
+.syn-info { display: flex; flex-direction: column; line-height: 1.15; }
+.syn-count { font-size: 9px; opacity: .85; }
+
+/* ---------- Barra inferior: acciones, banquillo y tienda ---------- */
+.bottom-ui {
+  bottom: 0; left: 0; right: 0;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(0deg, rgba(8,20,40,.94), rgba(8,20,40,.8) 60%, rgba(8,20,40,0));
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bottom-ui > * { width: 100%; max-width: 720px; margin: 0 auto; }
+.action-row { display: flex; align-items: center; gap: 6px; }
+.action-row .btn { flex: 0 0 auto; width: auto; margin: 0; padding: 8px 10px; font-size: 12px; }
+.action-row .btn .lbl { display: none; }
 
 .bench {
+  flex: 1 1 auto;
   display: flex;
-  gap: 8px;
-  background: rgba(12,30,58,.6);
-  border-radius: 12px;
-  padding: 8px;
+  gap: 5px;
+  background: rgba(12,30,58,.75);
+  border-radius: 10px;
+  padding: 5px;
   flex-wrap: nowrap;
   overflow-x: auto;
-  border: 2px solid rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  min-height: 54px;
 }
 .bench-slot {
-  width: 68px;
-  height: 68px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   background: rgba(255,255,255,.06);
   border: 2px dashed rgba(255,255,255,.15);
   flex-shrink: 0;
 }
 
+.sell-zone {
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  text-align: center;
+  border: 2px dashed rgba(255,120,120,.6);
+  border-radius: 10px;
+  font-size: 17px;
+  color: #ffb0b0;
+  cursor: pointer;
+}
+.sell-zone.drop-hover { background: rgba(255,80,80,.25); }
+
 .shop {
   display: flex;
-  gap: 10px;
-  background: rgba(12,30,58,.6);
-  border-radius: 12px;
-  padding: 8px;
-  border: 2px solid rgba(255,255,255,.08);
+  gap: 5px;
+  background: rgba(12,30,58,.75);
+  border-radius: 10px;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,.12);
   flex-wrap: nowrap;
   overflow-x: auto;
   justify-content: flex-start;
@@ -393,36 +380,49 @@ body.in-game { overflow: hidden; height: var(--app-height, 100dvh); }
 .syn-row { cursor: pointer; }
 .tooltip .row { display: flex; justify-content: space-between; gap: 10px; opacity: .9; }
 
+/* En movil, las tripulaciones se quedan solo con el icono para no tapar la
+   cubierta; el nombre completo sigue estando en su panel al tocarlas. */
 @media (max-width: 720px) {
-  .hud { padding: 6px 8px; }
-  .hud-player { font-size: 11px; gap: 6px; }
-  .hud-name { font-size: 12px; }
-  .hud-center { min-width: 70px; }
-  .hud-timer { font-size: 20px; }
+  .hud { padding: 5px 7px; }
+  .hud-player { font-size: 10px; gap: 5px; }
+  .hud-name { font-size: 11px; }
+  .hud-center { min-width: 62px; }
+  .hud-timer { font-size: 19px; }
 
-  .game-main { flex-direction: column; padding: 4px 6px; gap: 4px; }
-
-  /* Los paneles laterales se convierten en franjas horizontales compactas */
-  .side-panel { width: 100%; max-height: none; padding: 4px 8px; overflow: visible; }
-  .side-panel h3 { display: none; }
-
-  .synergies-panel { order: 1; flex: 0 0 auto; }
-  .synergy-list { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
-  .syn-row { flex: 0 0 auto; padding: 5px 8px; }
+  .synergies-panel { top: 56px; max-width: 30%; }
   .syn-info { display: none; }
+  .syn-row { padding: 4px 6px; }
 
-  .board-wrap { order: 2; flex: 1 1 auto; min-height: 0; width: 100%; margin: 0 auto; }
+  .unit-card { width: 62px; padding: 4px; }
+  .unit-avatar { width: 40px; height: 40px; font-size: 13px; }
+  .unit-card .uc-name { font-size: 8px; }
+  .unit-card .uc-cost { width: 16px; height: 16px; font-size: 9px; top: 2px; left: 3px; }
+  .captain-badge { font-size: 12px; }
+  .uc-sold { padding-top: 18px; font-size: 10px; }
 
-  .actions-panel { order: 3; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 6px; }
-  .actions-panel .btn { flex: 1 1 auto; width: auto; margin: 0; padding: 8px 6px; font-size: 12px; }
-  .sell-zone { flex: 0 0 auto; width: auto; margin: 0; padding: 8px 10px; font-size: 16px; }
-  .hint { display: none; }
+  .bench-unit { width: 40px; height: 40px; }
+  .bench-unit .unit-avatar { width: 29px; height: 29px; font-size: 10px; }
+  .bench-unit .stars { font-size: 8px; }
+  .bench-slot { width: 40px; height: 40px; }
+  .bench { gap: 4px; padding: 4px; min-height: 48px; }
+  .action-row { gap: 4px; }
+  .action-row .btn { padding: 8px 8px; }
+  .sell-zone { padding: 8px 9px; font-size: 15px; }
 
-  .bench-panel, .shop-panel { padding: 4px 8px; }
-  .bench-panel h3, .shop-panel h3 { font-size: 10px; margin-bottom: 3px; }
-  .bench { padding: 5px; gap: 6px; }
-  .shop { padding: 5px; gap: 6px; }
-  .unit-card { width: 74px; }
-  .unit-avatar { width: 48px; height: 48px; font-size: 15px; }
-  .uc-name { font-size: 9px !important; }
+  /* Compartiendo linea con los botones solo caben 3-4 huecos: en pantallas
+     estrechas el banquillo se lleva una fila entera para si. */
+  .action-row { flex-wrap: wrap; }
+  .bench { order: -1; flex: 1 0 100%; justify-content: center; }
+}
+
+/* Pantallas muy bajas (movil apaisado o con muchas barras): todo aun mas fino */
+@media (max-height: 620px) {
+  .hud-timer { font-size: 16px; }
+  .hud-phase, .hud-round { display: none; }
+  .unit-card { width: 54px; }
+  .unit-avatar { width: 34px; height: 34px; font-size: 11px; }
+  .bench-unit { width: 38px; height: 38px; }
+  .bench-unit .unit-avatar { width: 27px; height: 27px; font-size: 10px; }
+  .bench { min-height: 46px; }
+  .bench-slot { width: 38px; height: 38px; }
 }
