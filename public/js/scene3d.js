@@ -337,18 +337,54 @@ export function createScene(container) {
   // mayoria no existen. Si el endpoint no esta (servidor antiguo), probamos la
   // ruta por defecto directamente.
   let modelIndex = null;
-  function modelUrl(char) {
-    const porDefecto = `models/${char.crew}/${char.id}.glb`;
+  function fetchModelIndex() {
     if (!modelIndex) {
       modelIndex = fetch('api/models')
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => (d && d.models && typeof d.models === 'object' ? d.models : null))
         .catch(() => null);
     }
-    return modelIndex.then((mapa) => {
+    return modelIndex;
+  }
+  function modelUrl(char) {
+    const porDefecto = `models/${char.crew}/${char.id}.glb`;
+    return fetchModelIndex().then((mapa) => {
       if (!mapa) return porDefecto;
       return mapa[`${char.crew}/${char.id}`.toLowerCase()] || null;
     });
+  }
+
+  // Precarga. Un modelo pesa ~1 MB: si se pide justo cuando compras al
+  // personaje, la ficha tarda un momento en aparecer. Asi que en cuanto entras
+  // a la partida se van bajando todos en segundo plano, de dos en dos para no
+  // ahogar la conexion, y los que ya estan en la tienda o en tu equipo se piden
+  // aparte y sin esperar cola.
+  let precargando = false;
+  function preloadModels() {
+    if (precargando) return;
+    precargando = true;
+    fetchModelIndex().then((mapa) => {
+      if (!mapa) return;
+      const cola = Object.keys(mapa).map((k) => {
+        const corte = k.indexOf('/');
+        return { crew: k.slice(0, corte), id: k.slice(corte + 1) };
+      });
+      let enVuelo = 0;
+      const siguiente = () => {
+        while (enVuelo < 2 && cola.length) {
+          enVuelo++;
+          fetchModelFile(cola.shift()).then(() => { enVuelo--; siguiente(); });
+        }
+      };
+      siguiente();
+    });
+  }
+
+  // Los personajes que ya tienes delante van primero
+  function warmModels(chars) {
+    for (const char of chars) {
+      if (char && char.id && !modelFiles.has(char.id) && !modelPending.has(char.id)) fetchModelFile(char);
+    }
   }
 
   // Descarga el .glb una sola vez por personaje. Si no existe se recuerda el
@@ -934,6 +970,7 @@ export function createScene(container) {
   return {
     setBoard, syncUnits, setHighlights, pickCell, setInsets,
     addFloatingText, addAttackBeam, addAbilityBurst, resize, dispose,
+    preloadModels, warmModels,
     get cols() { return cols; },
     get rows() { return rows; },
     get tokens() { return tokens; }, // solo para pruebas automatizadas

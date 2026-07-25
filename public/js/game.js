@@ -283,6 +283,17 @@ import { createScene } from './scene3d.js';
     // el alto de la barra inferior cambia al llenarse la tienda o el banquillo
     syncSceneInsets();
 
+    // Los personajes que tienes delante (tienda, banquillo y cubierta) se
+    // adelantan en la cola de descarga de modelos.
+    if (scene) {
+      const aMano = [
+        ...payload.you.shop,
+        ...payload.you.bench.filter(Boolean).map((u) => u.pokemonId),
+        ...payload.you.board.map((u) => u.pokemonId),
+      ].map((id) => charDb[id]).filter(Boolean);
+      scene.warmModels(aMano);
+    }
+
     const readyBtn = document.getElementById('btn-ready');
     readyBtn.disabled = payload.phase !== 'prep' || payload.you.ready;
     // Mantenemos el <span class="lbl"> porque en movil se oculta para dejar el
@@ -290,7 +301,6 @@ import { createScene } from './scene3d.js';
     readyBtn.innerHTML = payload.you.ready
       ? '⏳ <span class="lbl">Esperando</span>'
       : '✅ <span class="lbl">Listo</span>';
-    document.getElementById('btn-reroll').disabled = payload.phase !== 'prep' || payload.you.gold < 2;
 
     const banner = document.getElementById('battle-banner');
     if (payload.phase === 'result' && payload.lastRoundInfo) {
@@ -316,7 +326,6 @@ import { createScene } from './scene3d.js';
   });
 
   document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
-  document.getElementById('btn-reroll').addEventListener('click', () => socket.emit('reroll'));
 
   // ---------------- Avatares 2D (tienda / banquillo) ----------------
   function makeAvatarEl(p) {
@@ -417,10 +426,17 @@ import { createScene } from './scene3d.js';
   // tienda ni el banquillo mientras juegas.
   const tooltip = document.getElementById('tooltip');
 
+  // Lo que devuelve venderla: lo que costaron todas las copias que lleva
+  // dentro (2 por cada estrella de mas), menos una moneda.
+  function sellPrice(cost, star) {
+    return Math.max(0, cost * Math.pow(2, Math.max(1, star || 1) - 1) - 1);
+  }
+
   function unitInfoHtml(p, star) {
     return `<h4>${p.captain ? '👑 ' : ''}${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
       <div class="row"><span>Tripulación</span><span>${crewDb[p.crew]?.icon || ''} ${crewDb[p.crew]?.label || p.crew}</span></div>
       <div class="row"><span>Coste</span><span>${p.cost} 🪙</span></div>
+      ${star ? `<div class="row"><span>Se vende por</span><span>${sellPrice(p.cost, star)} 🪙</span></div>` : ''}
       <div class="row"><span>Vida</span><span>${p.hp}</span></div>
       <div class="row"><span>Ataque</span><span>${p.atk}</span></div>
       <div class="row"><span>Defensa</span><span>${p.def}</span></div>
@@ -505,13 +521,21 @@ import { createScene } from './scene3d.js';
       elm.classList.toggle('selected', !!selectedUnit && elm.dataset.uid === selectedUnit.uid);
     });
     document.querySelectorAll('.syn-row').forEach((r) => r.classList.remove('open'));
-    // Al seleccionar una ficha (del banquillo o del tablero) mostramos su info
+    // Al seleccionar una ficha (del banquillo o del tablero) mostramos su info,
+    // y la papelera pasa a decir por cuanto se vende.
+    const papelera = document.getElementById('sell-zone');
     if (selectedUnit) {
       const unit = findMyUnit(selectedUnit.uid);
       const ch = unit && charDb[unit.pokemonId];
-      if (ch) showInfo(unitInfoHtml(ch, unit.star));
-      else hideTooltip();
+      if (ch) {
+        showInfo(unitInfoHtml(ch, unit.star));
+        const precio = sellPrice(ch.cost, unit.star);
+        papelera.innerHTML = `🗑️ <b>${precio}</b>🪙`;
+        papelera.title = `Vender ${ch.name} por ${precio} 🪙`;
+      } else hideTooltip();
     } else {
+      papelera.innerHTML = '🗑️';
+      papelera.title = 'Vender la ficha seleccionada';
       hideTooltip();
     }
     refreshBoard();
@@ -739,6 +763,9 @@ import { createScene } from './scene3d.js';
     try {
       scene = createScene(container);
       scene.setBoard(boardCols, boardRows);
+      // Nos traemos los modelos 3D en segundo plano nada mas entrar, para que
+      // ninguna ficha tarde en aparecer cuando la compres.
+      scene.preloadModels();
       syncSceneInsets();
       // Utilidad para las pruebas automaticas: comprobar que casilla cae bajo
       // un punto de la pantalla (sirve para verificar que el tablero entero

@@ -28,6 +28,12 @@ No hace falta tenerlos todos: puedes ir subiéndolos de uno en uno.
 > el archivo y recargar la página. En el servidor desplegado aparece con el
 > siguiente despliegue.
 
+Al entrar a una partida el juego se descarga en segundo plano **todos** los
+modelos que haya, de dos en dos, y adelanta en la cola los de los personajes que
+tengas delante (tienda, banquillo y cubierta). Por eso importa el peso: con
+archivos de ~1 MB la precarga termina en segundos y ninguna ficha tarda en
+aparecer; con archivos de 20 MB la primera vez que sale un personaje se le nota.
+
 ## Formato
 
 - **`.glb`** (glTF binario, un único archivo con mallas y texturas dentro).

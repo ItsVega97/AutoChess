@@ -57,8 +57,7 @@ arranque `npm start` y puerto por `process.env.PORT`).
    seleccionarlos y luego toca una casilla de tu mitad de la cubierta para
    colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
    La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
-   uno**, así que comprar nunca deja huecos vacíos; el reroll manual (2🪙) sigue
-   estando para cuando no te gusta ninguno.
+   uno**: es la única forma de cambiar la oferta, no hay botón de reroll.
    Los **40 personajes están disponibles desde la primera ronda**, capitanes
    incluidos: lo que cambia es lo raro que es que salga cada uno según su coste.
 
@@ -82,7 +81,11 @@ arranque `npm start` y puerto por `process.env.PORT`).
    La partida acaba cuando uno de los dos llega a 0 de sus 20 puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
-5. **Habilidades**: cada personaje llena su barra de maná (azul, debajo de la de
+5. **Vender**: selecciona una ficha y toca la papelera (que te dice por cuánto
+   se vende). Devuelve lo que costaron todas las copias que lleva dentro **menos
+   una moneda**, así que rotar el equipo cuesta algo. Un coste 3 a ⭐ se vende
+   por 2; a ⭐⭐ (2 copias, 6 🪙) por 5; a ⭐⭐⭐ (4 copias, 12 🪙) por 11.
+6. **Habilidades**: cada personaje llena su barra de maná (azul, debajo de la de
    vida) atacando y encajando golpes. Al llenarla lanza su técnica — desde el
    *Hiken* de Ace hasta el *Shima Yurashi* de Barbablanca. Puedes consultar la
    habilidad de cada uno pasando el ratón por su ficha en la tienda.
@@ -163,7 +166,7 @@ completa de nombres de archivo por tripulación.
 - `server/characterData.js` — roster de 40 personajes (con su habilidad y coste
   de maná) y definición de los 8 combos.
 - `server/economy.js` — tienda (4 huecos), probabilidades fijas por coste,
-  cupo de tropas, oro, ingresos y daño.
+  cupo de tropas, oro, ingresos, precio de venta y daño.
 - `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista
   sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
   quemaduras, escudos...) que el cliente reproduce para animar el combate igual

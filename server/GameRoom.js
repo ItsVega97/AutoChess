@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
-const { teamSizeForRound, rollShop, goldIncome, roundDamage, SHOP_SIZE } = require('./economy');
+const { teamSizeForRound, rollShop, goldIncome, roundDamage, sellPrice, SHOP_SIZE } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 
 const PREP_MS = 30000;
@@ -156,9 +156,6 @@ class GameRoom {
       if (!cell) break;
       this.moveToBoard(side, unit.uid, cell.x, cell.y, true);
     }
-    if (bot.gold >= 4 && Math.random() < 0.35) {
-      this.reroll(side, true);
-    }
     bot.ready = true;
   }
 
@@ -183,7 +180,7 @@ class GameRoom {
     p.gold -= def.cost;
     p.bench[benchIdx] = { uid: this.nextUid(), pokemonId, star: 1 };
     // Al estilo Tactics Royale: comprar renueva la tienda entera, no deja el
-    // hueco vacio. La tirada es gratis, el reroll manual sigue costando oro.
+    // hueco vacio. Es la unica forma de renovarla: no hay boton de reroll.
     p.shop = rollShop();
     this.runMerges(p);
     if (!skipEmit) this.broadcastState();
@@ -195,7 +192,7 @@ class GameRoom {
     const benchIdx = p.bench.findIndex((u) => u && u.uid === uid);
     if (benchIdx !== -1) {
       const unit = p.bench[benchIdx];
-      p.gold += CHARACTERS_BY_ID[unit.pokemonId].cost * unit.star;
+      p.gold += sellPrice(CHARACTERS_BY_ID[unit.pokemonId].cost, unit.star);
       p.bench[benchIdx] = null;
       this.broadcastState();
       return;
@@ -203,7 +200,7 @@ class GameRoom {
     const boardIdx = p.board.findIndex((u) => u.uid === uid);
     if (boardIdx !== -1) {
       const unit = p.board[boardIdx];
-      p.gold += CHARACTERS_BY_ID[unit.pokemonId].cost * unit.star;
+      p.gold += sellPrice(CHARACTERS_BY_ID[unit.pokemonId].cost, unit.star);
       p.board.splice(boardIdx, 1);
       this.broadcastState();
     }
@@ -261,15 +258,6 @@ class GameRoom {
     if (freeBench === -1) return;
     const [unit] = p.board.splice(boardIdx, 1);
     p.bench[freeBench] = unit;
-    if (!skipEmit) this.broadcastState();
-  }
-
-  reroll(side, skipEmit) {
-    const p = this.players[side];
-    if (this.phase !== 'prep' || !p.alive) return;
-    if (p.gold < 2) return;
-    p.gold -= 2;
-    p.shop = rollShop();
     if (!skipEmit) this.broadcastState();
   }
 

@@ -47,6 +47,19 @@ function rollShop() {
   return shop;
 }
 
+// Lo que te devuelven al vender. Una ficha de N estrellas se ha comido 2^(N-1)
+// copias (2 copias por subida), asi que su valor es lo que costaron todas; se
+// vende por una moneda menos, para que ir comprando y vendiendo no sea gratis.
+//   coste 3 a 1 estrella -> 3 invertidas -> 2
+//   coste 3 a 2 estrellas -> 6 invertidas -> 5
+//   coste 3 a 3 estrellas -> 12 invertidas -> 11
+function unitValue(cost, star) {
+  return cost * Math.pow(2, Math.max(1, star || 1) - 1);
+}
+function sellPrice(cost, star) {
+  return Math.max(0, unitValue(cost, star) - 1);
+}
+
 function goldIncome(gold, streak) {
   const base = 5;
   const interest = Math.min(5, Math.floor(gold / 10));
@@ -69,5 +82,5 @@ function roundDamage(round, survivors) {
 
 module.exports = {
   COST_ODDS, MAX_TEAM, SHOP_SIZE,
-  teamSizeForRound, rollShop, goldIncome, roundDamage,
+  teamSizeForRound, rollShop, goldIncome, roundDamage, unitValue, sellPrice,
 };

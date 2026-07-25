@@ -170,12 +170,6 @@ io.on('connection', (socket) => {
     room.moveToBench(room.sideOf(socket.id), uid);
   }));
 
-  socket.on('reroll', safe(() => {
-    const room = getRoom(socket.id);
-    if (!room) return;
-    room.reroll(room.sideOf(socket.id));
-  }));
-
   socket.on('ready', safe(() => {
     const room = getRoom(socket.id);
     if (!room) return;
