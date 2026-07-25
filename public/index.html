@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>PokéChess Royale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ================= PANTALLA DE INICIO ================= -->
+<section id="screen-menu" class="screen active">
+  <div class="menu-card">
+    <h1 class="logo">Poké<span>Chess</span> Royale</h1>
+    <p class="subtitle">Autobattler online al estilo Tactics Royale</p>
+
+    <input id="input-name" maxlength="16" placeholder="Tu nombre de entrenador" />
+
+    <button id="btn-play-online" class="btn btn-primary">⚔️ Jugar Online (1v1)</button>
+    <button id="btn-play-ai" class="btn btn-secondary">🤖 Jugar vs CPU (demo instantánea)</button>
+
+    <div id="queue-status" class="queue-status hidden">
+      <div class="spinner"></div>
+      <span>Buscando rival online...</span>
+      <button id="btn-cancel-queue" class="btn btn-ghost btn-small">Cancelar</button>
+    </div>
+
+    <div class="combos-preview">
+      <p class="combos-title">8 combos de tipo</p>
+      <div id="combo-icons" class="combo-icons"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PANTALLA DE JUEGO ================= -->
+<section id="screen-game" class="screen">
+  <header class="hud">
+    <div class="hud-player me">
+      <span class="hud-name" id="hud-my-name">Tú</span>
+      <span class="hud-hp">❤️ <b id="hud-my-hp">100</b></span>
+      <span class="hud-gold">🪙 <b id="hud-my-gold">10</b></span>
+      <span class="hud-level">Lv <b id="hud-my-level">1</b></span>
+    </div>
+    <div class="hud-center">
+      <div class="hud-phase" id="hud-phase">Preparación</div>
+      <div class="hud-timer" id="hud-timer">30</div>
+      <div class="hud-round">Ronda <span id="hud-round">1</span></div>
+    </div>
+    <div class="hud-player opp">
+      <span class="hud-name" id="hud-opp-name">Rival</span>
+      <span class="hud-hp">❤️ <b id="hud-opp-hp">100</b></span>
+      <span class="hud-level">Lv <b id="hud-opp-level">1</b></span>
+    </div>
+  </header>
+
+  <div class="battle-banner hidden" id="battle-banner"></div>
+
+  <main class="game-main">
+    <aside class="side-panel synergies-panel">
+      <h3>Combos activos</h3>
+      <div id="synergy-list" class="synergy-list"></div>
+    </aside>
+
+    <div class="board-wrap">
+      <canvas id="board-canvas" width="640" height="640"></canvas>
+    </div>
+
+    <aside class="side-panel actions-panel">
+      <h3>Acciones</h3>
+      <button id="btn-reroll" class="btn btn-secondary btn-small">🎲 Reroll (2 🪙)</button>
+      <button id="btn-ready" class="btn btn-primary btn-small">✅ Listo</button>
+      <div class="sell-zone" id="sell-zone">🗑️ Suelta aquí para vender</div>
+      <p class="hint">Arrastra desde el banquillo al tablero. 3 copias iguales = fusión ⭐</p>
+    </aside>
+  </main>
+
+  <section class="bench-panel">
+    <h3>Banquillo</h3>
+    <div id="bench" class="bench"></div>
+  </section>
+
+  <section class="shop-panel">
+    <h3>Tienda <span class="shop-hint">(clic para comprar)</span></h3>
+    <div id="shop" class="shop"></div>
+  </section>
+</section>
+
+<!-- ================= FIN DE PARTIDA ================= -->
+<section id="screen-end" class="screen">
+  <div class="menu-card">
+    <h1 id="end-title" class="logo">¡Victoria!</h1>
+    <p id="end-subtitle" class="subtitle">Has ganado la partida</p>
+    <button id="btn-restart" class="btn btn-primary">Jugar de nuevo</button>
+  </div>
+</section>
+
+<div id="tooltip" class="tooltip hidden"></div>
+<div id="reconnect-overlay" class="reconnect-overlay hidden">
+  <div class="spinner"></div>
+  <span>Reconectando...</span>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
