@@ -89,6 +89,11 @@ button { font-family: var(--font); cursor: pointer; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(255,255,255,.3); border-top-color: var(--gold); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.loading-block { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 0 10px; }
+.spinner-big { width: 40px; height: 40px; border-width: 5px; }
+.loading-text { font-weight: 700; font-size: 16px; margin: 0; }
+.loading-opponent { opacity: .8; font-size: 14px; margin: 0; }
+
 .combos-preview { margin-top: 24px; border-top: 1px solid rgba(255,255,255,.15); padding-top: 16px; }
 .combos-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .7; margin-bottom: 10px; }
 .combo-icons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
@@ -255,6 +260,7 @@ button { font-family: var(--font); cursor: pointer; }
 }
 .bench-unit img { width: 50px; height: 50px; object-fit: contain; pointer-events: none; }
 .bench-unit .stars { position: absolute; bottom: -2px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--gold); text-shadow: 0 1px 1px #000; }
+.bench-unit.selected { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,210,63,.5), 0 3px 6px rgba(0,0,0,.35); transform: translateY(-3px); }
 .bench-unit.dragging { opacity: .35; }
 
 .drag-ghost {

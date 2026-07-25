@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { POKEMON_BY_ID } = require('./pokemonData');
+const { POKEMON_BY_ID, MAX_STAR } = require('./pokemonData');
 const { levelForRound, boardCapacityForLevel, rollShop, goldIncome, roundDamage } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 
@@ -279,21 +279,21 @@ class GameRoom {
       ];
       const groups = {};
       for (const entry of all) {
-        if (entry.unit.star >= 3) continue;
+        if (entry.unit.star >= MAX_STAR) continue;
         const key = `${entry.unit.pokemonId}|${entry.unit.star}`;
         (groups[key] = groups[key] || []).push(entry);
       }
       for (const key of Object.keys(groups)) {
         const group = groups[key];
-        if (group.length >= 3) {
-          const trio = group.slice(0, 3);
-          const boardEntry = trio.find((e) => e.where === 'board');
-          const pokemonId = trio[0].unit.pokemonId;
-          const newStar = trio[0].unit.star + 1;
-          for (const e of trio) {
+        if (group.length >= 2) {
+          const pair = group.slice(0, 2);
+          const boardEntry = pair.find((e) => e.where === 'board');
+          const pokemonId = pair[0].unit.pokemonId;
+          const newStar = pair[0].unit.star + 1;
+          for (const e of pair) {
             if (e.where === 'bench') p.bench[e.idx] = null;
           }
-          const boardUids = trio.filter((e) => e.where === 'board').map((e) => e.unit.uid);
+          const boardUids = pair.filter((e) => e.where === 'board').map((e) => e.unit.uid);
           p.board = p.board.filter((u) => !boardUids.includes(u.uid));
           const merged = { uid: this.nextUid(), pokemonId, star: newStar };
           if (boardEntry) {

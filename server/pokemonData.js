@@ -147,6 +147,7 @@ const SYNERGIES = {
   },
 };
 
-const STAR_MULT = { 1: 1, 2: 1.8, 3: 3.24 };
+const STAR_MULT = { 1: 1, 2: 1.8, 3: 3.24, 4: 5.832 };
+const MAX_STAR = 4;
 
-module.exports = { POKEMON, POKEMON_BY_ID, SYNERGIES, STAR_MULT };
+module.exports = { POKEMON, POKEMON_BY_ID, SYNERGIES, STAR_MULT, MAX_STAR };

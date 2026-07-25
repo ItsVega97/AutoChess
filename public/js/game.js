@@ -135,7 +135,9 @@
   socket.on('queued', () => {});
 
   let sessionToken = null;
+  let enteredGame = false;
   socket.on('matchFound', ({ you, opponentName, token }) => {
+    const wasAlreadyInGame = enteredGame;
     mySide = you;
     searchingOnline = false;
     if (token) sessionToken = token;
@@ -143,7 +145,14 @@
     document.getElementById('hud-opp-name').textContent = opponentName;
     document.getElementById('hud-my-name').textContent = nameInput.value || 'Tú';
     document.getElementById('reconnect-overlay').classList.add('hidden');
-    show('screen-game');
+    if (wasAlreadyInGame) {
+      // Reconexion a una partida ya en marcha: volvemos directos, sin pantalla de carga.
+      show('screen-game');
+    } else {
+      enteredGame = false;
+      document.getElementById('loading-opponent').textContent = `Rival: ${opponentName}`;
+      show('screen-loading');
+    }
   });
 
   // Si el socket se cae y socket.io reconecta solo, recuperamos el sitio
@@ -206,6 +215,10 @@
 
   function renderState(payload) {
     myState = payload;
+    if (!enteredGame) {
+      enteredGame = true;
+      show('screen-game');
+    }
     document.getElementById('hud-phase').textContent =
       { prep: 'Preparación', battle: 'Combate', result: 'Resultado', lobby: 'Cargando' }[payload.phase] || payload.phase;
     document.getElementById('hud-round').textContent = payload.round;
@@ -300,7 +313,8 @@
       card.appendChild(img);
       card.appendChild(el('div', 'stars', '⭐'.repeat(unit.star)));
       card.dataset.uid = unit.uid;
-      card.addEventListener('pointerdown', (e) => startDrag(e, unit.uid, 'bench'));
+      if (selectedUnit && selectedUnit.uid === unit.uid) card.classList.add('selected');
+      card.addEventListener('pointerdown', (e) => beginPointer(e, unit.uid, 'bench'));
       card.addEventListener('mouseenter', (e) => showTooltip(e, p, unit.star));
       card.addEventListener('mousemove', (e) => moveTooltip(e));
       card.addEventListener('mouseleave', hideTooltip);
@@ -346,26 +360,55 @@
     tooltip.classList.add('hidden');
   }
 
-  // ---------------- Drag & Drop ----------------
-  function startDrag(e, uid, origin) {
-    if (!myState || myState.phase !== 'prep') return;
-    e.preventDefault();
-    const p = findUnitData(uid);
-    if (!p) return;
-    dragging = { uid, origin };
-    ghostEl = el('div', 'drag-ghost');
-    const img = el('img');
-    img.src = pokemonDb[p.pokemonId].sprite;
-    ghostEl.appendChild(img);
-    document.body.appendChild(ghostEl);
-    moveGhost(e);
-    window.addEventListener('pointermove', onDragMove);
-    window.addEventListener('pointerup', onDragEnd);
-  }
+  // ---------------- Colocar unidades: arrastrar (escritorio) o tocar dos veces (movil) ----------------
+  // Un mismo gesto de puntero sirve para ambas cosas: si el dedo/raton se
+  // mueve mas de DRAG_THRESHOLD px se trata como arrastre; si no se mueve,
+  // se trata como un toque que selecciona la unidad (y un segundo toque en
+  // el destino la coloca). Funciona igual con raton y con dedo.
+  const DRAG_THRESHOLD = 10;
+  let pointerStart = null; // { uid, origin, x, y, cellX, cellY }
+  let selectedUnit = null; // { uid, origin }
 
   function findUnitData(uid) {
     if (!myState) return null;
     return myState.you.bench.find((u) => u && u.uid === uid) || myState.you.board.find((u) => u.uid === uid);
+  }
+
+  function setSelected(uid, origin) {
+    selectedUnit = uid ? { uid, origin } : null;
+    document.querySelectorAll('.bench-unit').forEach((elm) => {
+      elm.classList.toggle('selected', !!selectedUnit && elm.dataset.uid === selectedUnit.uid);
+    });
+    scheduleRedraw();
+  }
+
+  function beginPointer(e, uid, origin, cellX, cellY) {
+    if (!myState || myState.phase !== 'prep' || battleActive) return;
+    pointerStart = { uid, origin, x: e.clientX, y: e.clientY, cellX, cellY };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!pointerStart) return;
+    const dist = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+    if (!dragging && pointerStart.uid && dist > DRAG_THRESHOLD) {
+      // Se ha movido lo suficiente: pasamos de "posible toque" a arrastre de verdad.
+      const p = findUnitData(pointerStart.uid);
+      if (!p) return;
+      dragging = { uid: pointerStart.uid, origin: pointerStart.origin };
+      setSelected(null, null);
+      ghostEl = el('div', 'drag-ghost');
+      const img = el('img');
+      img.src = pokemonDb[p.pokemonId].sprite;
+      ghostEl.appendChild(img);
+      document.body.appendChild(ghostEl);
+    }
+    if (dragging) {
+      moveGhost(e);
+      const sellZone = document.getElementById('sell-zone');
+      sellZone.classList.toggle('drop-hover', isOverEl(e, sellZone));
+    }
   }
 
   function moveGhost(e) {
@@ -375,50 +418,50 @@
     }
   }
 
-  function onDragMove(e) {
-    moveGhost(e);
-    const sellZone = document.getElementById('sell-zone');
-    sellZone.classList.toggle('drop-hover', isOverEl(e, sellZone));
-  }
-
   function isOverEl(e, target) {
     const r = target.getBoundingClientRect();
     return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   }
 
-  function onDragEnd(e) {
-    window.removeEventListener('pointermove', onDragMove);
-    window.removeEventListener('pointerup', onDragEnd);
+  function onPointerUp(e) {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
     document.getElementById('sell-zone').classList.remove('drop-hover');
-    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-    if (!dragging) return;
 
-    const sellZone = document.getElementById('sell-zone');
-    const benchZone = document.getElementById('bench');
-    if (isOverEl(e, sellZone)) {
-      socket.emit('sellUnit', { uid: dragging.uid });
-    } else if (isOverEl(e, benchZone)) {
-      if (dragging.origin === 'board') socket.emit('benchUnit', { uid: dragging.uid });
-    } else if (isOverEl(e, canvas)) {
-      const r = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / r.width;
-      const scaleY = canvas.height / r.height;
-      const cx = (e.clientX - r.left) * scaleX;
-      const cy = (e.clientY - r.top) * scaleY;
-      const col = Math.floor(cx / CELL);
-      const row = Math.floor(cy / CELL);
-      if (row >= 4 && row <= 7 && col >= 0 && col <= 7) {
-        const localX = col;
-        const localY = 7 - row;
-        socket.emit('placeOnBoard', { uid: dragging.uid, x: localX, y: localY });
+    if (dragging) {
+      if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+      const sellZone = document.getElementById('sell-zone');
+      const benchZone = document.getElementById('bench');
+      if (isOverEl(e, sellZone)) {
+        socket.emit('sellUnit', { uid: dragging.uid });
+      } else if (isOverEl(e, benchZone)) {
+        if (dragging.origin === 'board') socket.emit('benchUnit', { uid: dragging.uid });
+      } else if (isOverEl(e, canvas)) {
+        const cell = cellFromEvent(e);
+        if (cell) socket.emit('placeOnBoard', { uid: dragging.uid, x: cell.x, y: cell.y });
       }
+      dragging = null;
+      pointerStart = null;
+      return;
     }
-    dragging = null;
+
+    // No hubo arrastre: es un toque/clic simple -> logica de seleccionar/colocar.
+    if (!pointerStart) return;
+    const start = pointerStart;
+    pointerStart = null;
+    if (start.uid) {
+      if (selectedUnit && selectedUnit.uid === start.uid) {
+        setSelected(null, null); // tocar la misma unidad otra vez la deselecciona
+      } else {
+        setSelected(start.uid, start.origin);
+      }
+    } else if (start.origin === 'empty-cell' && selectedUnit) {
+      socket.emit('placeOnBoard', { uid: selectedUnit.uid, x: start.cellX, y: start.cellY });
+      setSelected(null, null);
+    }
   }
 
-  // Permite tambien iniciar arrastre desde una unidad ya colocada en el tablero (canvas)
-  canvas.addEventListener('pointerdown', (e) => {
-    if (!myState || myState.phase !== 'prep' || battleActive) return;
+  function cellFromEvent(e) {
     const r = canvas.getBoundingClientRect();
     const scaleX = canvas.width / r.width;
     const scaleY = canvas.height / r.height;
@@ -426,11 +469,34 @@
     const cy = (e.clientY - r.top) * scaleY;
     const col = Math.floor(cx / CELL);
     const row = Math.floor(cy / CELL);
-    if (row < 4 || row > 7) return;
-    const localX = col;
-    const localY = 7 - row;
-    const unit = myState.you.board.find((u) => u.x === localX && u.y === localY);
-    if (unit) startDrag(e, unit.uid, 'board');
+    if (row < 4 || row > 7 || col < 0 || col > 7) return null;
+    return { x: col, y: 7 - row };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!myState || myState.phase !== 'prep' || battleActive) return;
+    const cell = cellFromEvent(e);
+    if (!cell) return;
+    const unit = myState.you.board.find((u) => u.x === cell.x && u.y === cell.y);
+    if (unit) beginPointer(e, unit.uid, 'board');
+    else beginPointer(e, null, 'empty-cell', cell.x, cell.y);
+  });
+
+  // Tocar el banquillo vacio con una unidad seleccionada la manda de vuelta ahi.
+  document.getElementById('bench').addEventListener('click', (e) => {
+    if (!selectedUnit) return;
+    if (e.target.closest('.bench-unit')) return; // eso ya lo gestiona su propio listener
+    if (selectedUnit.origin === 'board') {
+      socket.emit('benchUnit', { uid: selectedUnit.uid });
+      setSelected(null, null);
+    }
+  });
+
+  // Tocar la zona de venta con una unidad seleccionada la vende.
+  document.getElementById('sell-zone').addEventListener('click', () => {
+    if (!selectedUnit) return;
+    socket.emit('sellUnit', { uid: selectedUnit.uid });
+    setSelected(null, null);
   });
 
   // ---------------- Render del tablero (fase de preparacion) ----------------
@@ -462,9 +528,30 @@
   function drawPrepBoard() {
     drawGridBase();
     if (!myState) return;
+    if (selectedUnit) {
+      // Resalta las celdas vacias de tu zona: ahi se colocaria la unidad seleccionada.
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 8; x++) {
+          if (myState.you.board.some((u) => u.x === x && u.y === y)) continue;
+          const row = 7 - y;
+          ctx.fillStyle = 'rgba(255,210,63,0.18)';
+          ctx.fillRect(x * CELL + 2, row * CELL + 2, CELL - 4, CELL - 4);
+        }
+      }
+    }
     for (const unit of myState.you.board) {
       const col = unit.x;
       const row = 7 - unit.y;
+      const isSelected = selectedUnit && selectedUnit.uid === unit.uid;
+      if (isSelected) {
+        ctx.save();
+        ctx.strokeStyle = '#ffd23f';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(col * CELL + CELL / 2, row * CELL + CELL / 2, CELL * 0.46, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       drawUnitSprite(unit.pokemonId, unit.star, col * CELL + CELL / 2, row * CELL + CELL / 2, null, 0, null);
     }
   }

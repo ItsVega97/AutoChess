@@ -53,8 +53,8 @@ arranque `npm start` y puerto por `process.env.PORT`).
 3. Sube de nivel automáticamente cada ronda (más oro, tienda con criaturas más
    fuertes, más hueco en el tablero) hasta que uno de los dos jugadores llega a 0
    de vida.
-4. **Fusión**: consigue 3 copias iguales de una criatura (mismo nivel de estrella)
-   y se fusionan automáticamente en una versión ⭐⭐ o ⭐⭐⭐ mucho más fuerte.
+4. **Fusión**: consigue 2 copias iguales de una criatura (mismo nivel de estrella)
+   y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 
 ## Los 8 combos (sinergias de tipo)
 
