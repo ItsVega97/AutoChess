@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: pokechess-royale
+    runtime: node
+    plan: free
+    branch: claude/pokemon-autochess-demo-2d3jbs
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20

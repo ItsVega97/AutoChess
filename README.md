@@ -24,12 +24,24 @@ Abre `http://localhost:3000` en el navegador.
 ## Cómo desplegarlo para jugar online de verdad (con otra persona en internet)
 
 Este repo es un servidor Node.js + Socket.io autocontenido, sin base de datos.
-Se puede desplegar gratis en cualquier plataforma que soporte Node + WebSockets:
+Incluye un `render.yaml` (Render Blueprint) para desplegarlo en 2-3 clics, gratis:
 
-- **Render / Railway / Fly.io**: conecta el repo, comando de arranque `npm start`,
-  puerto tomado de `process.env.PORT` (ya soportado).
-- Una vez desplegado, comparte la URL pública: cualquiera que la abra puede pulsar
-  "Jugar Online" y emparejarse con otro jugador conectado en ese momento.
+1. Entra en [render.com](https://render.com) (puedes registrarte con tu cuenta de
+   GitHub, plan gratuito).
+2. **New +** → **Blueprint** → conecta este repositorio (`ItsVega97/AutoChess`,
+   rama `claude/pokemon-autochess-demo-2d3jbs`).
+3. Render detecta `render.yaml` automáticamente (build `npm install`, arranque
+   `npm start`, puerto vía `process.env.PORT`, ya soportado) → **Apply**.
+4. En 1-2 minutos tendrás una URL pública tipo `https://pokechess-royale.onrender.com`.
+   Compártela: cualquiera que la abra puede pulsar "Jugar Online" y emparejarse
+   con otro jugador conectado en ese momento.
+
+También funciona igual en Railway o Fly.io si los prefieres (mismo comando de
+arranque `npm start` y puerto por `process.env.PORT`).
+
+> Nota: el plan gratuito de Render "duerme" el servicio tras ~15 min sin tráfico
+> y tarda unos segundos en despertar con la primera visita — normal en free tier,
+> no afecta a la partida una vez cargada.
 
 ## Cómo se juega
 
