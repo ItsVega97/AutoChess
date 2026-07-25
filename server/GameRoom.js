@@ -27,7 +27,9 @@ function newPlayer(id, name, isBot) {
     hp: START_HP,
     gold: START_GOLD,
     round: 0,
-    maxTeam: 1, // cuantas tropas caben en la cubierta: +1 por combate, hasta 6
+    maxTeam: 1,       // cuantas tropas caben en la cubierta: +1 por combate, hasta 6
+    lastOpponent: null, // para no repetir rival dos rondas seguidas
+    lastBye: 0,         // ronda en la que descanso por ultima vez
     winStreak: 0,
     lossStreak: 0,
     shop: new Array(SHOP_SIZE).fill(null),
@@ -39,24 +41,93 @@ function newPlayer(id, name, isBot) {
   };
 }
 
+const LADOS = ['A', 'B', 'C', 'D'];
+
 class GameRoom {
-  constructor(io, pA, pB) {
+  /**
+   * `jugadores` es una lista de 2 o 4 { id, name, isBot }. Con 4 se juega al
+   * estilo Tactics Royale: cada ronda te toca un rival distinto y vas cayendo
+   * hasta que solo queda uno en pie.
+   */
+  constructor(io, jugadores) {
     this.id = `room-${++roomCounter}-${Date.now()}`;
     this.io = io;
-    this.players = {
-      A: newPlayer(pA.id, pA.name, pA.isBot),
-      B: newPlayer(pB.id, pB.name, pB.isBot),
-    };
-    this.sideBySocket = { [pA.id]: 'A', [pB.id]: 'B' };
+    this.sides = LADOS.slice(0, jugadores.length);
+    this.players = {};
+    this.sideBySocket = {};
+    this.reconnectTimers = {};
+    jugadores.forEach((j, i) => {
+      const side = LADOS[i];
+      this.players[side] = newPlayer(j.id, j.name, j.isBot);
+      this.sideBySocket[j.id] = side;
+      this.reconnectTimers[side] = null;
+    });
     this.round = 0;
     this.phase = 'lobby';
     this.timeLeft = 0;
     this.unitCounter = 0;
     this.timer = null;
     this.ended = false;
-    this.lastSynergies = { A: [], B: [] };
-    this.reconnectTimers = { A: null, B: null };
-    this.onEnded = null; // callback asignado por index.js para limpiar mapas externos
+    this.pairs = [];        // [[ladoX, ladoY], ...] emparejamientos de esta ronda
+    this.byeSide = null;    // quien descansa cuando el numero de vivos es impar
+    this.lastFights = {};   // side -> resultado de su ultimo combate
+    this.lastSynergies = {};// side -> sinergias con las que peleo
+    this.placements = {};   // side -> puesto final (4 = primero en caer)
+    this.onEnded = null;    // callback asignado por index.js para limpiar mapas externos
+  }
+
+  get mode() {
+    return this.sides.length >= 4 ? '4p' : '1v1';
+  }
+
+  aliveSides() {
+    return this.sides.filter((s) => this.players[s].alive);
+  }
+
+  // Rival de este lado en la ronda actual (null si descansa)
+  opponentOf(side) {
+    for (const [x, y] of this.pairs) {
+      if (x === side) return y;
+      if (y === side) return x;
+    }
+    return null;
+  }
+
+  // Emparejamientos de la ronda: al azar, evitando repetir el rival de la
+  // ronda anterior mientras haya alternativa. Si sobran impares, uno descansa
+  // (el que lleve mas rondas sin descansar).
+  makePairs() {
+    const vivos = this.aliveSides();
+    this.pairs = [];
+    this.byeSide = null;
+    if (vivos.length < 2) return;
+
+    let mejor = null;
+    for (let intento = 0; intento < 12; intento++) {
+      const mezcla = vivos.slice();
+      for (let i = mezcla.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [mezcla[i], mezcla[j]] = [mezcla[j], mezcla[i]];
+      }
+      let descansa = null;
+      if (mezcla.length % 2 === 1) {
+        // descansa quien lleve mas tiempo sin hacerlo
+        mezcla.sort((a, b) => (this.players[a].lastBye || 0) - (this.players[b].lastBye || 0));
+        descansa = mezcla.shift();
+      }
+      const parejas = [];
+      for (let i = 0; i < mezcla.length; i += 2) parejas.push([mezcla[i], mezcla[i + 1]]);
+      const repite = parejas.some(([x, y]) => this.players[x].lastOpponent === y);
+      if (!repite) { mejor = { parejas, descansa }; break; }
+      if (!mejor) mejor = { parejas, descansa };
+    }
+    this.pairs = mejor.parejas;
+    this.byeSide = mejor.descansa;
+    if (this.byeSide) this.players[this.byeSide].lastBye = this.round;
+    for (const [x, y] of this.pairs) {
+      this.players[x].lastOpponent = y;
+      this.players[y].lastOpponent = x;
+    }
   }
 
   sideOf(socketId) {
@@ -73,10 +144,6 @@ class GameRoom {
       clearTimeout(this.reconnectTimers[side]);
       this.reconnectTimers[side] = null;
     }
-  }
-
-  other(side) {
-    return side === 'A' ? 'B' : 'A';
   }
 
   nextUid() {
@@ -104,7 +171,8 @@ class GameRoom {
     this.clearTimer();
     this.phase = 'prep';
     this.timeLeft = PREP_MS;
-    for (const side of ['A', 'B']) {
+    this.makePairs();
+    for (const side of this.sides) {
       const p = this.players[side];
       if (!p.alive) continue;
       p.round = this.round;
@@ -117,8 +185,8 @@ class GameRoom {
       if (this.round > 1) p.gold += goldIncome(p.gold, streak);
     }
     this.broadcastState();
-    for (const side of ['A', 'B']) {
-      if (this.players[side].isBot) this.runBotTurn(side);
+    for (const side of this.sides) {
+      if (this.players[side].isBot && this.players[side].alive) this.runBotTurn(side);
     }
     this.timer = setInterval(() => {
       this.timeLeft -= 1000;
@@ -132,9 +200,10 @@ class GameRoom {
   }
 
   checkBothReady() {
-    const a = this.players.A;
-    const b = this.players.B;
-    return (a.ready || !a.alive) && (b.ready || !b.alive);
+    return this.sides.every((s) => {
+      const p = this.players[s];
+      return p.ready || !p.alive;
+    });
   }
 
   runBotTurn(side) {
@@ -170,9 +239,12 @@ class GameRoom {
     return null;
   }
 
+  // Comprar se puede en cualquier momento de la partida, tambien mientras se
+  // resuelve el combate: lo comprado va al banquillo y entra a jugar en la
+  // ronda siguiente. Colocar y vender siguen siendo cosa de la preparacion.
   buyUnit(side, slotIdx, skipEmit) {
     const p = this.players[side];
-    if (this.phase !== 'prep' || !p.alive) return;
+    if (this.phase === 'gameover' || !p.alive) return;
     const pokemonId = p.shop[slotIdx];
     if (!pokemonId) return;
     const def = CHARACTERS_BY_ID[pokemonId];
@@ -319,48 +391,93 @@ class GameRoom {
 
   runBattlePhase() {
     this.phase = 'battle';
-    const a = this.players.A;
-    const b = this.players.B;
-    const result = simulateBattle(a.board, b.board);
-    this.lastResult = result;
-    this.lastSynergies = { A: result.synergiesA, B: result.synergiesB };
+    this.lastFights = {};
+    // Que el HUD sepa que ya se esta peleando (antes se quedaba en
+    // "Preparacion" durante todo el combate).
+    this.broadcastState();
+    let duracion = 0;
 
-    this.io.to(this.id).emit('battleStart', {
-      log: result.log,
-      durationMs: result.durationMs,
-      round: this.round,
-    });
+    // Un combate por pareja. Cada jugador recibe SOLO el log del suyo, y con
+    // el lado que le toca en el ('A' o 'B'), que en 4 jugadores cambia cada
+    // ronda segun con quien le emparejen.
+    for (const [x, y] of this.pairs) {
+      const px = this.players[x];
+      const py = this.players[y];
+      const result = simulateBattle(px.board, py.board);
+      duracion = Math.max(duracion, result.durationMs);
+      this.lastFights[x] = { result, lado: 'A', rival: y };
+      this.lastFights[y] = { result, lado: 'B', rival: x };
+      this.lastSynergies[x] = result.synergiesA;
+      this.lastSynergies[y] = result.synergiesB;
 
-    this.timer = setTimeout(() => this.applyBattleResult(result), result.durationMs + 800);
-  }
-
-  applyBattleResult(result) {
-    const a = this.players.A;
-    const b = this.players.B;
-
-    if (result.winner === 'A') {
-      a.winStreak++; a.lossStreak = 0;
-      b.lossStreak++; b.winStreak = 0;
-      const dmg = roundDamage(result.survivorsA);
-      b.hp = Math.max(0, b.hp - dmg);
-      this.lastRoundInfo = { winnerSide: 'A', damage: dmg };
-    } else if (result.winner === 'B') {
-      b.winStreak++; b.lossStreak = 0;
-      a.lossStreak++; a.winStreak = 0;
-      const dmg = roundDamage(result.survivorsB);
-      a.hp = Math.max(0, a.hp - dmg);
-      this.lastRoundInfo = { winnerSide: 'B', damage: dmg };
-    } else {
-      this.lastRoundInfo = { winnerSide: null, damage: 0 };
+      for (const [side, lado] of [[x, 'A'], [y, 'B']]) {
+        const sock = this.io.sockets.sockets.get(this.players[side].id);
+        if (!sock) continue;
+        sock.emit('battleStart', {
+          log: result.log,
+          durationMs: result.durationMs,
+          round: this.round,
+          youAre: lado,
+          opponentName: this.players[side === x ? y : x].name,
+        });
+      }
     }
 
-    if (a.hp <= 0) a.alive = false;
-    if (b.hp <= 0) b.alive = false;
+    // Quien descansa esta ronda no pelea: se le avisa para que no espere
+    if (this.byeSide) {
+      const sock = this.io.sockets.sockets.get(this.players[this.byeSide].id);
+      if (sock) sock.emit('roundBye', { round: this.round });
+    }
+
+    this.timer = setTimeout(() => this.applyBattleResult(), Math.max(1200, duracion) + 800);
+  }
+
+  applyBattleResult() {
+    this.roundInfo = {}; // side -> como le fue a el
+
+    for (const [x, y] of this.pairs) {
+      const px = this.players[x];
+      const py = this.players[y];
+      const { result } = this.lastFights[x];
+
+      if (result.winner === 'A' || result.winner === 'B') {
+        const ganador = result.winner === 'A' ? x : y;
+        const perdedor = result.winner === 'A' ? y : x;
+        const supervivientes = result.winner === 'A' ? result.survivorsA : result.survivorsB;
+        const dmg = roundDamage(supervivientes);
+        this.players[ganador].winStreak++; this.players[ganador].lossStreak = 0;
+        this.players[perdedor].lossStreak++; this.players[perdedor].winStreak = 0;
+        this.players[perdedor].hp = Math.max(0, this.players[perdedor].hp - dmg);
+        this.roundInfo[ganador] = { result: 'win', damage: dmg, opponentName: this.players[perdedor].name };
+        this.roundInfo[perdedor] = { result: 'loss', damage: dmg, opponentName: this.players[ganador].name };
+      } else {
+        this.roundInfo[x] = { result: 'draw', damage: 0, opponentName: py.name };
+        this.roundInfo[y] = { result: 'draw', damage: 0, opponentName: px.name };
+      }
+    }
+    if (this.byeSide) this.roundInfo[this.byeSide] = { result: 'bye', damage: 0, opponentName: null };
+
+    // Eliminados de esta ronda: el ultimo en caer queda por delante
+    const caidos = [];
+    for (const side of this.sides) {
+      const p = this.players[side];
+      if (p.alive && p.hp <= 0) { p.alive = false; caidos.push(side); }
+    }
+    if (caidos.length) {
+      const puesto = this.aliveSides().length + caidos.length;
+      for (const side of caidos) this.placements[side] = puesto;
+    }
 
     this.phase = 'result';
     this.broadcastState();
 
-    if (!a.alive || !b.alive) {
+    // A quien acaba de caer se le da su puesto y deja de jugar
+    for (const side of caidos) {
+      const sock = this.io.sockets.sockets.get(this.players[side].id);
+      if (sock) sock.emit('gameOver', { won: false, draw: false, place: this.placements[side], total: this.sides.length });
+    }
+
+    if (this.aliveSides().length <= 1) {
       this.timer = setTimeout(() => this.endGame(), RESULT_MS);
     } else {
       this.timer = setTimeout(() => {
@@ -372,13 +489,20 @@ class GameRoom {
 
   endGame() {
     this.phase = 'gameover';
-    const a = this.players.A;
-    const b = this.players.B;
-    const winnerSide = a.alive ? 'A' : b.alive ? 'B' : null;
-    for (const side of ['A', 'B']) {
+    const vivos = this.aliveSides();
+    const winnerSide = vivos.length === 1 ? vivos[0] : null;
+    if (winnerSide) this.placements[winnerSide] = 1;
+    for (const side of this.sides) {
+      // A los eliminados ya se les aviso en su momento
+      if (!this.players[side].alive && this.placements[side]) continue;
       const sock = this.io.sockets.sockets.get(this.players[side].id);
       if (sock) {
-        sock.emit('gameOver', { won: side === winnerSide, draw: winnerSide === null });
+        sock.emit('gameOver', {
+          won: side === winnerSide,
+          draw: winnerSide === null,
+          place: this.placements[side] || null,
+          total: this.sides.length,
+        });
       }
     }
     this.ended = true;
@@ -407,31 +531,46 @@ class GameRoom {
   }
 
   broadcastState() {
-    for (const side of ['A', 'B']) {
+    for (const side of this.sides) {
       const p = this.players[side];
       const sock = this.io.sockets.sockets.get(p.id);
       if (!sock) continue;
+      const rival = this.opponentOf(side);
       sock.emit('state', {
         phase: this.phase,
         round: this.round,
         timeLeft: this.timeLeft,
+        mode: this.mode,
         you: this.publicPlayerView(side),
-        opponent: {
-          name: this.players[this.other(side)].name,
-          hp: this.players[this.other(side)].hp,
-          maxTeam: this.players[this.other(side)].maxTeam,
-          alive: this.players[this.other(side)].alive,
-          ready: this.players[this.other(side)].ready,
-        },
-        lastRoundInfo: this.lastRoundInfo || null,
+        opponent: rival ? {
+          name: this.players[rival].name,
+          hp: this.players[rival].hp,
+          maxTeam: this.players[rival].maxTeam,
+          alive: this.players[rival].alive,
+          ready: this.players[rival].ready,
+        } : null,
+        // Marcador de la sala (en 1v1 son dos, en 4 jugadores los cuatro)
+        table: this.sides.map((s2) => ({
+          name: this.players[s2].name,
+          hp: this.players[s2].hp,
+          alive: this.players[s2].alive,
+          you: s2 === side,
+          opponent: s2 === rival,
+        })),
+        lastRoundInfo: (this.roundInfo && this.roundInfo[side]) || null,
       });
     }
   }
 
   broadcastTick() {
-    for (const side of ['A', 'B']) {
+    for (const side of this.sides) {
       const sock = this.io.sockets.sockets.get(this.players[side].id);
-      if (sock) sock.emit('tick', { timeLeft: this.timeLeft, opponentReady: this.players[this.other(side)].ready });
+      if (!sock) continue;
+      const rival = this.opponentOf(side);
+      sock.emit('tick', {
+        timeLeft: this.timeLeft,
+        opponentReady: rival ? this.players[rival].ready : false,
+      });
     }
   }
 
@@ -442,10 +581,9 @@ class GameRoom {
     const side = this.sideOf(socketId);
     if (!side || this.ended) return;
     this.players[side].connected = false;
-    const other = this.other(side);
-    const otherP = this.players[other];
-    if (!otherP.isBot) {
-      const sock = this.io.sockets.sockets.get(otherP.id);
+    const rival = this.opponentOf(side);
+    if (rival && !this.players[rival].isBot) {
+      const sock = this.io.sockets.sockets.get(this.players[rival].id);
       if (sock) sock.emit('opponentDisconnected', { graceMs: RECONNECT_GRACE_MS });
     }
     if (this.reconnectTimers[side]) clearTimeout(this.reconnectTimers[side]);
@@ -454,14 +592,28 @@ class GameRoom {
     }, RECONNECT_GRACE_MS);
   }
 
+  // Si no vuelve, se le da por eliminado y la partida sigue con el resto.
+  // Cuando queda un solo jugador (o ninguno) la sala se cierra.
   finalizeDisconnect(side) {
     if (this.ended) return;
-    const other = this.other(side);
-    const sock = this.io.sockets.sockets.get(this.players[other].id);
-    if (sock && !this.players[other].isBot) sock.emit('opponentLeft');
-    this.clearTimer();
-    this.ended = true;
-    if (this.onEnded) this.onEnded();
+    const p = this.players[side];
+    if (p.alive) {
+      p.alive = false;
+      p.hp = 0;
+      this.placements[side] = this.aliveSides().length + 1;
+    }
+    const quedan = this.aliveSides().filter((s) => !this.players[s].isBot);
+    for (const s2 of this.sides) {
+      const sock = this.io.sockets.sockets.get(this.players[s2].id);
+      if (sock && s2 !== side && !this.players[s2].isBot) sock.emit('opponentLeft', { name: p.name });
+    }
+    if (this.aliveSides().length <= 1 || quedan.length === 0) {
+      this.clearTimer();
+      this.ended = true;
+      if (this.onEnded) this.onEnded();
+      return;
+    }
+    this.broadcastState();
   }
 }
 

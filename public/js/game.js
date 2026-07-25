@@ -13,6 +13,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
   let boardRows = 6;
   let rowsPerPlayer = 3;
   let mySide = null;
+  let battleSide = null; // que lado ('A'/'B') soy en el combate que se reproduce
   let myState = null; // ultimo payload 'state'
   let scene = null;
 
@@ -106,7 +107,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
   function battleToRender(x, y) {
     // El lado A ya viene en las filas de abajo; el B hay que voltearlo para
     // que cada jugador se vea a si mismo en la parte cercana.
-    return { col: x, row: mySide === 'B' ? boardRows - 1 - y : y };
+    return { col: x, row: battleSide === 'B' ? boardRows - 1 - y : y };
   }
   function isMyHalfRow(row) {
     return row >= boardRows - rowsPerPlayer;
@@ -218,13 +219,28 @@ import { getThumb, getThumbSync } from './thumbs.js';
 
   let searchingOnline = false;
   let searchingName = null;
+  let modoElegido = localStorage.getItem('pcr-mode') === '4p' ? '4p' : '1v1';
+
+  function pintarModo() {
+    document.querySelectorAll('.mode-opt').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === modoElegido);
+    });
+  }
+  document.querySelectorAll('.mode-opt').forEach((b) => {
+    b.addEventListener('click', () => {
+      modoElegido = b.dataset.mode;
+      localStorage.setItem('pcr-mode', modoElegido);
+      pintarModo();
+    });
+  });
+  pintarModo();
 
   document.getElementById('btn-play-online').addEventListener('click', () => {
     const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
     searchingOnline = true;
     searchingName = name;
-    socket.emit('findMatch', { name });
+    socket.emit('findMatch', { name, mode: modoElegido });
     document.getElementById('queue-status').classList.remove('hidden');
   });
 
@@ -237,14 +253,17 @@ import { getThumb, getThumbSync } from './thumbs.js';
   document.getElementById('btn-play-ai').addEventListener('click', () => {
     const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
-    socket.emit('playAI', { name });
+    socket.emit('playAI', { name, mode: modoElegido });
   });
 
   document.getElementById('btn-restart').addEventListener('click', () => {
     location.reload();
   });
 
-  socket.on('queued', () => {});
+  socket.on('queued', ({ waiting, needed } = {}) => {
+    const t = document.getElementById('queue-text');
+    if (t && needed) t.textContent = `Buscando piratas... ${waiting}/${needed}`;
+  });
 
   let sessionToken = null;
   let enteredGame = false;
@@ -270,7 +289,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
     if (sessionToken) {
       socket.emit('rejoin', { token: sessionToken });
     } else if (searchingOnline) {
-      socket.emit('findMatch', { name: searchingName });
+      socket.emit('findMatch', { name: searchingName, mode: modoElegido });
     }
   });
 
@@ -304,12 +323,16 @@ import { getThumb, getThumbSync } from './thumbs.js';
     location.reload();
   });
 
-  socket.on('gameOver', ({ won, draw }) => {
-    document.getElementById('end-title').textContent = draw ? 'Empate' : won ? '¡Victoria!' : 'Derrota';
+  socket.on('gameOver', ({ won, draw, place, total }) => {
+    const puesto = place && total > 2 ? ` · ${place}º de ${total}` : '';
+    document.getElementById('end-title').textContent =
+      (draw ? 'Empate' : won ? '¡Victoria!' : 'Derrota') + puesto;
     document.getElementById('end-subtitle').textContent = draw
       ? 'La partida ha terminado en tablas.'
       : won
       ? '¡Te has convertido en el Rey de los Piratas!'
+      : total > 2
+      ? `Tu tripulación ha caído en el puesto ${place}. ¡Vuelve a zarpar!`
       : 'Tu tripulación ha caído. ¡Vuelve a zarpar!';
     show('screen-end');
   });
@@ -341,8 +364,11 @@ import { getThumb, getThumbSync } from './thumbs.js';
     const cupo = document.getElementById('hud-my-level');
     cupo.textContent = `${payload.you.board.length}/${payload.you.maxTeam}`;
     cupo.classList.toggle('lleno', payload.you.board.length >= payload.you.maxTeam);
-    document.getElementById('hud-opp-hp').textContent = payload.opponent.hp;
-    document.getElementById('hud-opp-level').textContent = payload.opponent.maxTeam;
+    const rival = payload.opponent;
+    document.getElementById('hud-opp-name').textContent = rival ? rival.name : 'Descansas';
+    document.getElementById('hud-opp-hp').textContent = rival ? rival.hp : '-';
+    document.getElementById('hud-opp-level').textContent = rival ? rival.maxTeam : '-';
+    renderTable(payload.table, payload.mode);
 
     renderShop(payload.you);
     renderBench(payload.you);
@@ -372,20 +398,33 @@ import { getThumb, getThumbSync } from './thumbs.js';
     const banner = document.getElementById('battle-banner');
     if (payload.phase === 'result' && payload.lastRoundInfo) {
       const info = payload.lastRoundInfo;
-      if (info.winnerSide === null) {
-        banner.textContent = 'Empate en el combate. Nadie recibe daño.';
-      } else {
-        const iWon = info.winnerSide === mySide;
-        banner.textContent = iWon
-          ? `¡Ganaste el combate! Tu rival pierde ${info.damage} de vida.`
-          : `Perdiste el combate. Pierdes ${info.damage} de vida.`;
-      }
+      const rival = info.opponentName ? ` (${info.opponentName})` : '';
+      if (info.result === 'draw') banner.textContent = 'Empate en el combate. Nadie recibe daño.';
+      else if (info.result === 'bye') banner.textContent = 'Ronda de descanso: esta vez no peleabas.';
+      else if (info.result === 'win') banner.textContent = `¡Ganaste el combate${rival}! Pierde ${info.damage} de vida.`;
+      else banner.textContent = `Perdiste el combate${rival}. Pierdes ${info.damage} de vida.`;
       banner.classList.remove('hidden');
     } else if (payload.phase === 'prep') {
       banner.classList.add('hidden');
     }
 
     if (!battleActive) refreshBoard();
+  }
+
+  // Marcador de la sala: en 4 jugadores se ve quien sigue vivo y con cuanta
+  // vida, con tu fila y la de tu rival de esta ronda marcadas.
+  function renderTable(mesa, modo) {
+    const wrap = document.getElementById('table-standings');
+    if (!wrap) return;
+    if (!mesa || modo !== '4p') { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = '';
+    for (const j of mesa) {
+      const fila = el('div', `ts-row${j.you ? ' me' : ''}${j.opponent ? ' rival' : ''}${j.alive ? '' : ' dead'}`);
+      fila.innerHTML = `<span class="ts-name">${j.you ? '➤ ' : ''}${j.name}</span>
+        <span class="ts-hp">${j.alive ? `❤️ ${j.hp}` : '☠️'}</span>`;
+      wrap.appendChild(fila);
+    }
   }
 
   socket.on('tick', ({ timeLeft }) => {
@@ -439,7 +478,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
       }
       const p = charDb[pid];
       if (!p) return;
-      const affordable = you.gold >= p.cost && you.bench.some((s) => s === null) && myState.phase === 'prep';
+      // Se puede comprar tambien durante el combate: lo que compres espera en
+      // el banquillo y entra en la ronda siguiente.
+      const affordable = you.gold >= p.cost && you.bench.some((s) => s === null)
+        && myState.phase !== 'gameover';
       const card = el('div', `unit-card uc-crew-${p.crew}${p.captain ? ' captain' : ''}${affordable ? '' : ' locked'}`);
       card.appendChild(el('div', 'uc-cost', p.cost));
       if (p.captain) card.appendChild(el('div', 'captain-badge', '👑'));
@@ -655,6 +697,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         uid: u.uid,
         char: { ...ch, star: u.star },
         col, row,
+        mine: true,
         selected: !!selectedUnit && selectedUnit.uid === u.uid,
         showHp: false,
       });
@@ -664,7 +707,9 @@ import { getThumb, getThumbSync } from './thumbs.js';
   }
 
   // ---------------- Animacion de combate ----------------
-  socket.on('battleStart', ({ log }) => {
+  socket.on('battleStart', ({ log, youAre, opponentName }) => {
+    battleSide = youAre || mySide;
+    if (opponentName) document.getElementById('hud-opp-name').textContent = opponentName;
     battleLog = log;
     battleIdx = 0;
     battleUnits = new Map();
@@ -674,6 +719,13 @@ import { getThumb, getThumbSync } from './thumbs.js';
     setSelected(null);
     document.getElementById('battle-banner').classList.add('hidden');
     requestAnimationFrame(battleFrame);
+  });
+
+  // En 4 jugadores, si el numero de vivos es impar uno descansa esa ronda
+  socket.on('roundBye', () => {
+    const banner = document.getElementById('battle-banner');
+    banner.textContent = 'Esta ronda descansas: no te toca rival.';
+    banner.classList.remove('hidden');
   });
 
   function applyBattleEvent(e) {
@@ -818,6 +870,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
         uid,
         char: { ...ch, star: u.star },
         col, row,
+        // Los modelos miran siempre al bando contrario, no hacia donde caminan:
+        // si se orientase por la fila, al avanzar a la mitad rival se darian
+        // media vuelta en mitad del combate.
+        mine: u.side === battleSide,
         selected: false,
         showHp: u.alive,
         hpFrac: u.hp / u.maxHp,

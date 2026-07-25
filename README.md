@@ -23,12 +23,22 @@ npm start
 
 Abre `http://localhost:3000` en el navegador.
 
-- **🤖 Jugar vs CPU**: empieza una partida al instante contra un bot, ideal para
-  probar la demo tú solo.
-- **⚔️ Jugar Online (1v1)**: te mete en una cola de emparejamiento. Abre la misma
-  URL en **otra pestaña, otro navegador o desde otro dispositivo en la misma red**
-  (usando la IP de la máquina, ej. `http://192.168.1.x:3000`) y pulsa también
-  "Jugar Online" para emparejar dos jugadores reales.
+Arriba se elige el modo — **⚔️ 1v1** o **🏴‍☠️ 4 piratas** — y ese modo vale para
+los dos botones:
+
+- **🤖 Jugar vs CPU**: empieza al instante, con 1 o 3 bots según el modo.
+- **Jugar Online**: te mete en la cola de ese modo (hacen falta 2 o 4 jugadores).
+  Abre la misma URL en **otra pestaña, otro navegador o desde otro dispositivo en
+  la misma red** (usando la IP de la máquina, ej. `http://192.168.1.x:3000`) y
+  pulsa también "Jugar Online" para emparejar jugadores reales.
+
+### Modo 4 piratas
+
+Cuatro tripulaciones en la misma mesa. Cada ronda te toca **un rival distinto**
+(no repite dos rondas seguidas) y todos comparten la misma fase de preparación.
+Cuando el número de vivos es impar, uno **descansa** esa ronda por turnos. Vas
+cayendo hasta que solo queda uno: al morir se te dice tu puesto (4º, 3º, 2º) y
+arriba a la derecha tienes el marcador con la vida de los cuatro.
 
 ## Cómo desplegarlo para jugar online de verdad (con otra persona en internet)
 
@@ -58,7 +68,9 @@ arranque `npm start` y puerto por `process.env.PORT`).
    colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
    La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
    uno**: es la única forma de cambiar la oferta, no hay botón de reroll. Entre
-   rondas **no cambia**, así que lo que no compraste sigue esperándote.
+   rondas **no cambia**, así que lo que no compraste sigue esperándote. Comprar
+   se puede **también durante el combate**: la ficha espera en el banquillo y
+   entra en la ronda siguiente (colocar y vender sí son cosa de la preparación).
    Los **40 personajes están disponibles desde la primera ronda**, capitanes
    incluidos: lo que cambia es lo raro que es que salga cada uno según su coste.
 
@@ -189,9 +201,10 @@ completa de nombres de archivo por tripulación.
   sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
   quemaduras, escudos...) que el cliente reproduce para animar el combate igual
   en ambos jugadores, con la formación real de cada uno.
-- `server/GameRoom.js` — máquina de estados de una partida 1v1 (preparación /
-  combate / resultado), tienda, banquillo, fusiones, IA del bot, reconexión.
-- `server/index.js` — servidor Express + Socket.io, cola de emparejamiento.
+- `server/GameRoom.js` — máquina de estados de una partida de 2 o 4 jugadores
+  (preparación / combate / resultado), emparejamientos por ronda, tienda,
+  banquillo, fusiones, IA del bot, reconexión y eliminación por puestos.
+- `server/index.js` — servidor Express + Socket.io, una cola por modo.
 - `public/js/scene3d.js` — toda la escena 3D (Three.js): barco, mar, casillas,
   fichas, efectos de combate y selección de casilla por raycasting. La cámara
   encuadra la cubierta en el hueco libre entre el HUD y la barra inferior

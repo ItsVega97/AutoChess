@@ -56,7 +56,9 @@ app.get('/api/models', (req, res) => res.json({ models: listModels() }));
 const rooms = new Map(); // roomId -> GameRoom
 const socketRoom = new Map(); // socketId -> roomId
 const sessions = new Map(); // token -> { roomId, side }
-const queue = []; // { socketId, name }
+// Una cola por modo: 1v1 necesita 2 jugadores y "4 piratas" necesita 4.
+const queues = { '1v1': [], '4p': [] };
+const NOMBRES_BOT = ['CPU Rival', 'CPU Nakama', 'CPU Marine', 'CPU Corsario'];
 
 function safe(fn) {
   return (...args) => {
@@ -68,30 +70,40 @@ function safe(fn) {
   };
 }
 
-function createRoom(pA, pB) {
-  const room = new GameRoom(io, pA, pB);
+function createRoom(jugadores) {
+  const room = new GameRoom(io, jugadores);
   rooms.set(room.id, room);
   room.onEnded = () => {
     rooms.delete(room.id);
-    if (room.players.A.token) sessions.delete(room.players.A.token);
-    if (room.players.B.token) sessions.delete(room.players.B.token);
+    for (const side of room.sides) {
+      const t = room.players[side].token;
+      if (t) sessions.delete(t);
+    }
   };
 
-  for (const side of ['A', 'B']) {
-    const p = side === 'A' ? pA : pB;
-    if (p.isBot) continue;
+  room.sides.forEach((side, i) => {
+    const p = jugadores[i];
+    if (p.isBot) return;
     socketRoom.set(p.id, room.id);
     sessions.set(room.players[side].token, { roomId: room.id, side });
     const sock = io.sockets.sockets.get(p.id);
     if (sock) sock.join(room.id);
-  }
+  });
 
-  const sockA = io.sockets.sockets.get(pA.id);
-  if (sockA) sockA.emit('matchFound', { you: 'A', opponentName: pB.name, token: room.players.A.token });
-  if (!pB.isBot) {
-    const sockB = io.sockets.sockets.get(pB.id);
-    if (sockB) sockB.emit('matchFound', { you: 'B', opponentName: pA.name, token: room.players.B.token });
-  }
+  room.sides.forEach((side, i) => {
+    const p = jugadores[i];
+    if (p.isBot) return;
+    const sock = io.sockets.sockets.get(p.id);
+    if (!sock) return;
+    sock.emit('matchFound', {
+      you: side,
+      mode: room.mode,
+      token: room.players[side].token,
+      // En 4 jugadores el rival cambia cada ronda: aqui va la mesa entera
+      opponentName: jugadores.filter((_, j) => j !== i).map((o) => o.name).join(', '),
+      table: jugadores.map((o) => o.name),
+    });
+  });
   room.start();
   return room;
 }
@@ -102,26 +114,43 @@ function getRoom(socketId) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('findMatch', safe(({ name }) => {
+  socket.on('findMatch', safe(({ name, mode }) => {
     const safeName = String(name || 'Entrenador').slice(0, 16);
-    if (queue.some((q) => q.socketId === socket.id)) return;
-    queue.push({ socketId: socket.id, name: safeName });
-    socket.emit('queued');
-    if (queue.length >= 2) {
-      const pA = queue.shift();
-      const pB = queue.shift();
-      createRoom({ id: pA.socketId, name: pA.name }, { id: pB.socketId, name: pB.name });
+    const modo = mode === '4p' ? '4p' : '1v1';
+    const hacenFalta = modo === '4p' ? 4 : 2;
+    // Si estaba buscando en el otro modo, se le saca de alli
+    for (const q of Object.values(queues)) {
+      const i = q.findIndex((e) => e.socketId === socket.id);
+      if (i !== -1) q.splice(i, 1);
+    }
+    queues[modo].push({ socketId: socket.id, name: safeName });
+    socket.emit('queued', { mode: modo, waiting: queues[modo].length, needed: hacenFalta });
+    // Avisamos a los que esperan de cuantos van
+    for (const e of queues[modo]) {
+      const s2 = io.sockets.sockets.get(e.socketId);
+      if (s2) s2.emit('queued', { mode: modo, waiting: queues[modo].length, needed: hacenFalta });
+    }
+    if (queues[modo].length >= hacenFalta) {
+      const grupo = queues[modo].splice(0, hacenFalta);
+      createRoom(grupo.map((g) => ({ id: g.socketId, name: g.name })));
     }
   }));
 
   socket.on('cancelFindMatch', safe(() => {
-    const idx = queue.findIndex((q) => q.socketId === socket.id);
-    if (idx !== -1) queue.splice(idx, 1);
+    for (const q of Object.values(queues)) {
+      const i = q.findIndex((e) => e.socketId === socket.id);
+      if (i !== -1) q.splice(i, 1);
+    }
   }));
 
-  socket.on('playAI', safe(({ name }) => {
+  socket.on('playAI', safe(({ name, mode }) => {
     const safeName = String(name || 'Entrenador').slice(0, 16);
-    createRoom({ id: socket.id, name: safeName }, { id: `bot-${socket.id}`, name: 'CPU Rival', isBot: true });
+    const total = mode === '4p' ? 4 : 2;
+    const jugadores = [{ id: socket.id, name: safeName }];
+    for (let i = 1; i < total; i++) {
+      jugadores.push({ id: `bot-${socket.id}-${i}`, name: NOMBRES_BOT[i - 1], isBot: true });
+    }
+    createRoom(jugadores);
   }));
 
   // Reconexion: el cliente guarda el token recibido en 'matchFound' y lo
@@ -136,13 +165,18 @@ io.on('connection', (socket) => {
     socketRoom.set(socket.id, room.id);
     socket.join(room.id);
 
-    const other = room.other(entry.side);
-    const otherPlayer = room.players[other];
-    if (!otherPlayer.isBot) {
-      const otherSock = io.sockets.sockets.get(otherPlayer.id);
+    const rival = room.opponentOf(entry.side);
+    if (rival && !room.players[rival].isBot) {
+      const otherSock = io.sockets.sockets.get(room.players[rival].id);
       if (otherSock) otherSock.emit('opponentReconnected');
     }
-    socket.emit('matchFound', { you: entry.side, opponentName: otherPlayer.name, token });
+    socket.emit('matchFound', {
+      you: entry.side,
+      mode: room.mode,
+      token,
+      opponentName: rival ? room.players[rival].name : '',
+      table: room.sides.map((s2) => room.players[s2].name),
+    });
     room.broadcastState();
   }));
 
@@ -179,8 +213,10 @@ io.on('connection', (socket) => {
   socket.on('leaveRoom', safe(() => cleanup(socket.id)));
 
   socket.on('disconnect', safe(() => {
-    const idx = queue.findIndex((q) => q.socketId === socket.id);
-    if (idx !== -1) queue.splice(idx, 1);
+    for (const q of Object.values(queues)) {
+      const i = q.findIndex((e) => e.socketId === socket.id);
+      if (i !== -1) q.splice(i, 1);
+    }
     cleanup(socket.id);
   }));
 

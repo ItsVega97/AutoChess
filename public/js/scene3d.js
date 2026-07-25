@@ -593,8 +593,10 @@ export function createScene(container) {
       // El panel siempre mira a la camara para que se lea bien el personaje
       tok.panel.quaternion.copy(camera.quaternion);
 
-      // Cada bando mira hacia el contrario (la fila 0 es la mitad enemiga)
-      tok.facing = u.row >= rows / 2 ? Math.PI : 0;
+      // Cada bando mira hacia el contrario. Va por bando y no por la fila en la
+      // que este: durante el combate las unidades avanzan a la mitad rival y si
+      // fuese por fila se darian media vuelta al cruzar el centro.
+      tok.facing = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
       if (tok.model) {
         tok.model.rotation.y = tok.facing;
         if (tok.fade !== op) {

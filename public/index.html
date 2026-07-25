@@ -17,12 +17,17 @@
 
     <input id="input-name" maxlength="16" placeholder="Tu nombre de pirata" />
 
-    <button id="btn-play-online" class="btn btn-primary">⚔️ Jugar Online (1v1)</button>
-    <button id="btn-play-ai" class="btn btn-secondary">🤖 Jugar vs CPU (demo instantánea)</button>
+    <div class="mode-picker">
+      <button class="mode-opt active" data-mode="1v1">⚔️ 1v1</button>
+      <button class="mode-opt" data-mode="4p">🏴‍☠️ 4 piratas</button>
+    </div>
+
+    <button id="btn-play-online" class="btn btn-primary">Jugar Online</button>
+    <button id="btn-play-ai" class="btn btn-secondary">🤖 Jugar vs CPU</button>
 
     <div id="queue-status" class="queue-status hidden">
       <div class="spinner"></div>
-      <span>Buscando rival online...</span>
+      <span id="queue-text">Buscando rival online...</span>
       <button id="btn-cancel-queue" class="btn btn-ghost btn-small">Cancelar</button>
     </div>
 
@@ -71,6 +76,7 @@
       <div class="hud-timer" id="hud-timer">30</div>
       <div class="hud-round">Ronda <span id="hud-round">1</span></div>
     </div>
+    <div class="hud-standings hidden" id="table-standings"></div>
     <div class="hud-player opp">
       <span class="hud-name" id="hud-opp-name">Rival</span>
       <span class="hud-hp">❤️ <b id="hud-opp-hp">12</b></span>
