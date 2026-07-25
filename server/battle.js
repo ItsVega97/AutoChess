@@ -5,8 +5,9 @@ const { CHARACTERS_BY_ID, CREWS, STAR_MULT } = require('./characterData');
 const TICK_MS = 150;
 const MAX_TICKS = 160; // ~24s
 const MOVE_EVERY = 3;
-const BOARD_COLS = 8;
-const BOARD_ROWS = 8;
+// Arena compacta estilo Tactics Royale: 5 columnas x 6 filas (3 por jugador).
+const BOARD_COLS = 5;
+const BOARD_ROWS = 6;
 
 function computeSynergies(board) {
   const counts = {};

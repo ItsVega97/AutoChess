@@ -5,6 +5,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { CHARACTERS, CREWS } = require('./characterData');
+const { BOARD_COLS, BOARD_ROWS } = require('./battle');
 const GameRoom = require('./GameRoom');
 
 const app = express();
@@ -18,7 +19,11 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/api/units', (req, res) => {
-  res.json({ characters: CHARACTERS, crews: CREWS });
+  res.json({
+    characters: CHARACTERS,
+    crews: CREWS,
+    board: { cols: BOARD_COLS, rows: BOARD_ROWS, rowsPerPlayer: BOARD_ROWS / 2 },
+  });
 });
 
 const rooms = new Map(); // roomId -> GameRoom

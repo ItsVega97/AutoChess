@@ -75,7 +75,7 @@
     </aside>
 
     <div class="board-wrap">
-      <canvas id="board-canvas" width="640" height="640"></canvas>
+      <div id="board-3d"></div>
     </div>
 
     <aside class="side-panel actions-panel">
@@ -83,7 +83,7 @@
       <button id="btn-reroll" class="btn btn-secondary btn-small">🎲 Reroll (2 🪙)</button>
       <button id="btn-ready" class="btn btn-primary btn-small">✅ Listo</button>
       <div class="sell-zone" id="sell-zone">🗑️ Vender</div>
-      <p class="hint">Toca un personaje y luego una casilla del tablero para colocarlo (o arrástralo). 2 copias iguales = fusión ⭐, hasta ⭐⭐⭐⭐</p>
+      <p class="hint">Toca un personaje y luego una casilla de tu cubierta para colocarlo. 2 copias iguales = fusión ⭐, hasta ⭐⭐⭐⭐</p>
     </aside>
   </main>
 
@@ -114,6 +114,6 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="js/game.js"></script>
+<script type="module" src="js/game.js"></script>
 </body>
 </html>

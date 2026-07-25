@@ -1,10 +1,14 @@
 # Nakama Royale
 
-Demo jugable de un **auto-battler online** con temática pirata (One Piece),
+Demo jugable de un **auto-battler online en 3D** con temática pirata (One Piece),
 inspirado en la jugabilidad de *Tactics Royale* (Clash Royale) y en autobattlers
 tipo TFT: compras en tienda, banquillo, tablero, fusiones de unidades y combates
 automáticos por rondas contra otro jugador en tiempo real (o contra una IA para
 probarlo tú solo al instante).
+
+El combate se juega sobre la **cubierta 3D de un barco pirata** renderizada con
+Three.js, con un tablero compacto de 5x3 casillas por jugador y 20 puntos de vida
+cada uno — partidas rápidas, de unas 8-14 rondas.
 
 ## Cómo jugar (local)
 
@@ -45,15 +49,15 @@ arranque `npm start` y puerto por `process.env.PORT`).
 
 ## Cómo se juega
 
-1. **Fase de preparación (30s)**: compra personajes en la tienda, colócalos en tu
-   mitad del tablero — tócalos y luego toca la casilla destino, o arrástralos —
-   y pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
+1. **Fase de preparación (30s)**: compra personajes en la tienda, tócalos para
+   seleccionarlos y luego toca una casilla de tu mitad de la cubierta para
+   colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
 2. **Combate automático**: tu tripulación lucha sola contra la del rival, con la
    formación exacta en la que la colocaste. Gana quien deje unidades vivas; el
    perdedor pierde vida según lo que sobrevivió al ganador.
 3. Sube de nivel automáticamente cada ronda (más oro, tienda con personajes más
-   fuertes, más hueco en el tablero) hasta que uno de los dos jugadores llega a 0
-   de vida.
+   fuertes, más hueco en la cubierta) hasta que uno de los dos jugadores llega a 0
+   de sus 20 puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 
@@ -75,29 +79,64 @@ se activa un nivel III definitivo.
 | 👑 Piratas de Roger (capitán: Gol D. Roger) | Legado del Rey | Regeneración de vida y más vida máxima |
 | 🕶️ Baroque Works (capitán: Crocodile) | Agentes disciplinados | Más ataque y más defensa |
 
-Roster: 40 personajes (5 por tripulación). Sin artwork oficial hotlinkeado desde
-wikis externas (poco fiable y con dudas de derechos): cada personaje tiene un
-"cartel de se busca" generado en cliente con sus iniciales y el color de su
-tripulación — nunca depende de la red y encaja con la temática pirata.
+Roster: 40 personajes (5 por tripulación).
+
+## Imágenes de los personajes
+
+Cada personaje puede tener un retrato propio. Se usa tanto en la tienda y el
+banquillo (2D) como en el "cartel de se busca" de su ficha 3D en la cubierta.
+
+1. Guarda la imagen en `public/img/characters/` (por ejemplo `luffy.jpg`).
+2. Añade la entrada en el objeto `PORTRAITS` de `server/characterData.js`:
+   ```js
+   const PORTRAITS = { luffy: 'luffy.jpg' };
+   ```
+
+Los personajes sin retrato muestran automáticamente sus iniciales sobre el color
+de su tripulación, así que no hace falta tenerlas las 40 para empezar. No se
+enlazan imágenes desde wikis externas: son poco fiables (se rompen al cambiar la
+URL, bloqueadas por CORS en algunas redes) y de derechos dudosos.
+
+## Fichas 3D
+
+Ahora mismo cada ficha es una **peana 3D con un cartel vertical** que muestra el
+retrato del personaje, al estilo de una figura de mesa. Funciona sin descargar
+nada y se ve bien en móvil.
+
+Para sustituirlas por **modelos 3D reales**, el formato que necesita el juego es
+**`.glb`** (glTF binario), a poder ser de bajo poligonaje (unos pocos miles de
+triángulos) y en pose neutra. Dónde conseguirlos:
+
+| Sitio | Qué ofrece |
+|---|---|
+| [Sketchfab](https://sketchfab.com) | El catálogo más grande; filtra por "Downloadable" + licencia CC. Exporta a `.glb` |
+| [Mixamo](https://www.mixamo.com) | Gratis (Adobe): riggea y anima automáticamente cualquier modelo humanoide |
+| [Ready Player Me](https://readyplayer.me) | Genera avatares 3D personalizables y los exporta en `.glb` |
+| [Kenney](https://kenney.nl/assets) | Packs low-poly gratuitos (props y escenario, no personajes con licencia) |
+| [TurboSquid](https://www.turbosquid.com) / [CGTrader](https://www.cgtrader.com) | De pago, mayor calidad |
+
+Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
+`GLTFLoader` de Three.js sustituyendo la peana actual en `scene3d.js`.
 
 ## Arquitectura
 
 - `server/characterData.js` — roster de 40 personajes y definición de los 8 combos.
-- `server/economy.js` — tienda, probabilidades por nivel, oro e ingresos.
-- `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista,
-  genera un log de eventos (movimiento, ataques, muertes, quemaduras, escudos...)
-  que el cliente reproduce para animar el combate igual en ambos jugadores, con
-  la formación real de cada jugador.
+- `server/economy.js` — tienda, probabilidades por nivel, oro, ingresos y daño.
+- `server/battle.js` — motor de combate por turnos (tick de 150ms) determinista
+  sobre una arena de 5x6, genera un log de eventos (movimiento, ataques, muertes,
+  quemaduras, escudos...) que el cliente reproduce para animar el combate igual
+  en ambos jugadores, con la formación real de cada uno.
 - `server/GameRoom.js` — máquina de estados de una partida 1v1 (preparación /
   combate / resultado), tienda, banquillo, fusiones, IA del bot, reconexión.
 - `server/index.js` — servidor Express + Socket.io, cola de emparejamiento.
-- `public/` — cliente (HTML/CSS + un único `game.js`): pantalla de partida a
-  pantalla completa sin scroll, render en `<canvas>`, tocar-para-colocar (además
-  de arrastrar), y reproducción animada del combate.
+- `public/js/scene3d.js` — toda la escena 3D (Three.js): barco, mar, casillas,
+  fichas, efectos de combate y selección de casilla por raycasting.
+- `public/js/game.js` — sockets, interfaz 2D (tienda, banquillo, HUD) y la
+  traducción entre las coordenadas del servidor y las de la escena.
+- `public/vendor/` — Three.js incluido en el repo (ver el README de esa carpeta).
 
 ## Notas
 
 - Proyecto de fan, sin ánimo de lucro ni afiliación con Eiichiro Oda/Shueisha/Toei
-  Animation. No usa imágenes oficiales (evita depender de hotlinks poco fiables o
-  con derechos dudosos); los avatares son carteles de "se busca" generados en cliente.
+  Animation.
 - Sin base de datos: el estado de las partidas vive en memoria del servidor.

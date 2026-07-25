@@ -1,61 +1,32 @@
 'use strict';
 
+import { createScene } from './scene3d.js';
+
 (() => {
   const socket = io();
 
   // ---------------- Estado global ----------------
   let charDb = {}; // id -> personaje
   let crewDb = {}; // crew slug -> {label icon desc}
+  let boardCols = 5;
+  let boardRows = 6;
+  let rowsPerPlayer = 3;
   let mySide = null;
   let myState = null; // ultimo payload 'state'
-  let dragging = null; // { uid, origin: 'bench'|'board' }
-  let ghostEl = null;
+  let scene = null;
+
   let battleActive = false;
-  let battleUnits = new Map(); // uid -> render state
-  let battleFx = []; // lineas de impacto
-  let battleFloats = []; // textos flotantes de dano/curacion
+  let battleUnits = new Map(); // uid -> estado de render
   let battleLog = [];
   let battleIdx = 0;
   let battleStartTs = 0;
   const TICK_MS = 150;
 
-  const CELLS = 8;
-  const canvas = document.getElementById('board-canvas');
-  const ctx = canvas.getContext('2d');
-  const CELL = canvas.width / CELLS;
-
-  // Colores por tripulacion para los avatares dibujados en el tablero
-  // (los carteles del banquillo/tienda usan las mismas tonalidades via CSS).
-  const CREW_STYLE = {
-    strawhat: { fill: '#e8542f', ring: '#8a2a12' },
-    whitebeard: { fill: '#3d7dc9', ring: '#173a66' },
-    bigmom: { fill: '#e35fc0', ring: '#7a1f66' },
-    beast: { fill: '#8b5cf6', ring: '#3d1f7a' },
-    redhair: { fill: '#d1293f', ring: '#6e0f1d' },
-    blackbeard: { fill: '#5c5468', ring: '#15121c' },
-    roger: { fill: '#e8b94a', ring: '#8a6110' },
-    baroque: { fill: '#e8862f', ring: '#3a2410' },
-  };
-
-  // Cache de retratos para el tablero. Son ficheros propios (mismo origen),
-  // asi que a diferencia de un hotlink externo son fiables: si no existe,
-  // el error llega rapido y nos quedamos con el cartel de iniciales.
-  const portraitCache = new Map();
-  function getPortraitImage(filename) {
-    let img = portraitCache.get(filename);
-    if (!img) {
-      img = new Image();
-      img.src = `/img/characters/${filename}`;
-      img.onload = () => scheduleRedraw();
-      portraitCache.set(filename, img);
-    }
-    return img;
-  }
-
   // ---------------- Utilidades UI ----------------
   function show(id) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    if (id === 'screen-game' && scene) setTimeout(() => scene.resize(), 30);
   }
 
   function el(tag, cls, html) {
@@ -63,6 +34,32 @@
     if (cls) e.className = cls;
     if (html !== undefined) e.innerHTML = html;
     return e;
+  }
+
+  /**
+   * Conversion de coordenadas.
+   *
+   * El servidor habla en dos espacios distintos:
+   *  - preparacion: (x, y) dentro de TU mitad, con y=0 en tu fila de delante.
+   *  - combate: (x, y) absolutos del tablero completo, donde el lado B ocupa
+   *    las filas de arriba y el A las de abajo.
+   *
+   * La escena 3D siempre dibuja "tu mitad cerca de la camara", asi que aqui
+   * traducimos ambos espacios a coordenadas de render (fila 0 = fondo/enemigo).
+   */
+  function prepToRender(x, y) {
+    return { col: x, row: boardRows - 1 - y };
+  }
+  function renderToPrep(col, row) {
+    return { x: col, y: boardRows - 1 - row };
+  }
+  function battleToRender(x, y) {
+    // El lado A ya viene en las filas de abajo; el B hay que voltearlo para
+    // que cada jugador se vea a si mismo en la parte cercana.
+    return { col: x, row: mySide === 'B' ? boardRows - 1 - y : y };
+  }
+  function isMyHalfRow(row) {
+    return row >= boardRows - rowsPerPlayer;
   }
 
   // ---------------- Carga inicial de datos ----------------
@@ -75,8 +72,14 @@
       .then((data) => {
         charDb = Object.fromEntries(data.characters.map((c) => [c.id, c]));
         crewDb = data.crews;
+        if (data.board) {
+          boardCols = data.board.cols;
+          boardRows = data.board.rows;
+          rowsPerPlayer = data.board.rowsPerPlayer;
+          if (scene) scene.setBoard(boardCols, boardRows);
+        }
         renderComboPreview();
-        if (myState) { renderShop(myState.you); renderBench(myState.you); scheduleRedraw(); }
+        if (myState) { renderShop(myState.you); renderBench(myState.you); refreshBoard(); }
       })
       .catch((err) => {
         console.error('No se pudieron cargar los datos de personajes, reintentando...', err);
@@ -139,7 +142,6 @@
     document.getElementById('hud-my-name').textContent = nameInput.value || 'Tú';
     document.getElementById('reconnect-overlay').classList.add('hidden');
     if (wasAlreadyInGame) {
-      // Reconexion a una partida ya en marcha: volvemos directos, sin pantalla de carga.
       show('screen-game');
     } else {
       enteredGame = false;
@@ -148,11 +150,6 @@
     }
   });
 
-  // Si el socket se cae y socket.io reconecta solo, recuperamos el sitio
-  // en la partida con el token guardado (sin perder progreso ni el rival).
-  // Si todavia estabamos buscando rival (sin token, sin partida empezada),
-  // nos volvemos a apuntar a la cola: si no, el cliente se queda mostrando
-  // "buscando" para siempre aunque el servidor ya nos haya sacado de la cola.
   socket.on('connect', () => {
     if (sessionToken) {
       socket.emit('rejoin', { token: sessionToken });
@@ -175,11 +172,15 @@
   });
 
   socket.on('opponentDisconnected', () => {
-    document.getElementById('hud-opp-name').textContent = `${document.getElementById('hud-opp-name').textContent} (desconectado)`;
+    const nameEl = document.getElementById('hud-opp-name');
+    if (!nameEl.textContent.includes('(desconectado)')) {
+      nameEl.textContent = `${nameEl.textContent} (desconectado)`;
+    }
   });
 
   socket.on('opponentReconnected', () => {
-    document.getElementById('hud-opp-name').textContent = document.getElementById('hud-opp-name').textContent.replace(' (desconectado)', '');
+    const nameEl = document.getElementById('hud-opp-name');
+    nameEl.textContent = nameEl.textContent.replace(' (desconectado)', '');
   });
 
   socket.on('opponentLeft', () => {
@@ -247,9 +248,7 @@
       banner.classList.add('hidden');
     }
 
-    if (payload.phase === 'prep' && !battleActive) {
-      scheduleRedraw();
-    }
+    if (!battleActive) refreshBoard();
   }
 
   socket.on('tick', ({ timeLeft }) => {
@@ -259,7 +258,7 @@
   document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
   document.getElementById('btn-reroll').addEventListener('click', () => socket.emit('reroll'));
 
-  // ---------------- Avatares: retrato real si existe, si no cartel de iniciales ----------------
+  // ---------------- Avatares 2D (tienda / banquillo) ----------------
   function makeAvatarEl(p) {
     if (p.portrait) {
       const wrap = el('div', `unit-avatar unit-avatar-img${p.captain ? ' captain' : ''}`);
@@ -267,7 +266,6 @@
       img.src = `/img/characters/${p.portrait}`;
       img.alt = p.name;
       img.onerror = () => {
-        // el fichero no existe o fallo al cargar: caemos al cartel de iniciales
         wrap.classList.remove('unit-avatar-img');
         wrap.textContent = p.initials;
       };
@@ -285,7 +283,7 @@
     wrap.innerHTML = '';
     you.shop.forEach((pid, idx) => {
       if (!pid) {
-        wrap.appendChild(el('div', 'unit-card locked', '<div style="opacity:.4;padding-top:26px">vendido</div>'));
+        wrap.appendChild(el('div', 'unit-card locked', '<div class="uc-sold">vendido</div>'));
         return;
       }
       const p = charDb[pid];
@@ -317,12 +315,13 @@
         return;
       }
       const p = charDb[unit.pokemonId];
+      if (!p) return;
       const card = el('div', `bench-unit uc-crew-${p.crew}${p.captain ? ' captain' : ''}`);
       card.appendChild(makeAvatarEl(p));
       card.appendChild(el('div', 'stars', '⭐'.repeat(unit.star)));
       card.dataset.uid = unit.uid;
       if (selectedUnit && selectedUnit.uid === unit.uid) card.classList.add('selected');
-      card.addEventListener('pointerdown', (e) => beginPointer(e, unit.uid, 'bench'));
+      card.addEventListener('click', () => toggleSelect(unit.uid, 'bench'));
       card.addEventListener('mouseenter', (e) => showTooltip(e, p, unit.star));
       card.addEventListener('mousemove', (e) => moveTooltip(e));
       card.addEventListener('mouseleave', hideTooltip);
@@ -369,305 +368,81 @@
     tooltip.classList.add('hidden');
   }
 
-  // ---------------- Colocar unidades: arrastrar (escritorio) o tocar dos veces (movil) ----------------
-  // Un mismo gesto de puntero sirve para ambas cosas: si el dedo/raton se
-  // mueve mas de DRAG_THRESHOLD px se trata como arrastre; si no se mueve,
-  // se trata como un toque que selecciona la unidad (y un segundo toque en
-  // el destino la coloca). Funciona igual con raton y con dedo.
-  const DRAG_THRESHOLD = 10;
-  let pointerStart = null; // { uid, origin, x, y, cellX, cellY }
+  // ---------------- Seleccionar y colocar ----------------
+  // En 3D el arrastre no aporta nada (y va mal en movil): se juega tocando la
+  // ficha y despues la casilla destino.
   let selectedUnit = null; // { uid, origin }
 
-  function findUnitData(uid) {
-    if (!myState) return null;
-    return myState.you.bench.find((u) => u && u.uid === uid) || myState.you.board.find((u) => u.uid === uid);
+  function toggleSelect(uid, origin) {
+    if (!myState || myState.phase !== 'prep' || battleActive) return;
+    if (selectedUnit && selectedUnit.uid === uid) setSelected(null);
+    else setSelected({ uid, origin });
   }
 
-  function setSelected(uid, origin) {
-    selectedUnit = uid ? { uid, origin } : null;
+  function setSelected(sel) {
+    selectedUnit = sel;
     document.querySelectorAll('.bench-unit').forEach((elm) => {
       elm.classList.toggle('selected', !!selectedUnit && elm.dataset.uid === selectedUnit.uid);
     });
-    scheduleRedraw();
+    refreshBoard();
   }
 
-  function beginPointer(e, uid, origin, cellX, cellY) {
-    if (!myState || myState.phase !== 'prep' || battleActive) return;
-    pointerStart = { uid, origin, x: e.clientX, y: e.clientY, cellX, cellY };
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-  }
-
-  function onPointerMove(e) {
-    if (!pointerStart) return;
-    const dist = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-    if (!dragging && pointerStart.uid && dist > DRAG_THRESHOLD) {
-      // Se ha movido lo suficiente: pasamos de "posible toque" a arrastre de verdad.
-      const p = findUnitData(pointerStart.uid);
-      if (!p) return;
-      dragging = { uid: pointerStart.uid, origin: pointerStart.origin };
-      setSelected(null, null);
-      const charInfo = charDb[p.pokemonId];
-      ghostEl = el('div', 'drag-ghost');
-      ghostEl.appendChild(makeAvatarEl(charInfo));
-      document.body.appendChild(ghostEl);
-    }
-    if (dragging) {
-      moveGhost(e);
-      const sellZone = document.getElementById('sell-zone');
-      sellZone.classList.toggle('drop-hover', isOverEl(e, sellZone));
-    }
-  }
-
-  function moveGhost(e) {
-    if (ghostEl) {
-      ghostEl.style.left = `${e.clientX}px`;
-      ghostEl.style.top = `${e.clientY}px`;
-    }
-  }
-
-  function isOverEl(e, target) {
-    const r = target.getBoundingClientRect();
-    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  }
-
-  function onPointerUp(e) {
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    document.getElementById('sell-zone').classList.remove('drop-hover');
-
-    if (dragging) {
-      if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-      const sellZone = document.getElementById('sell-zone');
-      const benchZone = document.getElementById('bench');
-      if (isOverEl(e, sellZone)) {
-        socket.emit('sellUnit', { uid: dragging.uid });
-      } else if (isOverEl(e, benchZone)) {
-        if (dragging.origin === 'board') socket.emit('benchUnit', { uid: dragging.uid });
-      } else if (isOverEl(e, canvas)) {
-        const cell = cellFromEvent(e);
-        if (cell) socket.emit('placeOnBoard', { uid: dragging.uid, x: cell.x, y: cell.y });
-      }
-      dragging = null;
-      pointerStart = null;
-      return;
-    }
-
-    // No hubo arrastre: es un toque/clic simple -> logica de seleccionar/colocar.
-    if (!pointerStart) return;
-    const start = pointerStart;
-    pointerStart = null;
-    if (start.uid) {
-      if (selectedUnit && selectedUnit.uid === start.uid) {
-        setSelected(null, null); // tocar la misma unidad otra vez la deselecciona
-      } else {
-        setSelected(start.uid, start.origin);
-      }
-    } else if (start.origin === 'empty-cell' && selectedUnit) {
-      socket.emit('placeOnBoard', { uid: selectedUnit.uid, x: start.cellX, y: start.cellY });
-      setSelected(null, null);
-    }
-  }
-
-  function cellFromEvent(e) {
-    const r = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / r.width;
-    const scaleY = canvas.height / r.height;
-    const cx = (e.clientX - r.left) * scaleX;
-    const cy = (e.clientY - r.top) * scaleY;
-    const col = Math.floor(cx / CELL);
-    const row = Math.floor(cy / CELL);
-    if (row < 4 || row > 7 || col < 0 || col > 7) return null;
-    return { x: col, y: 7 - row };
-  }
-
-  canvas.addEventListener('pointerdown', (e) => {
-    if (!myState || myState.phase !== 'prep' || battleActive) return;
-    const cell = cellFromEvent(e);
-    if (!cell) return;
-    const unit = myState.you.board.find((u) => u.x === cell.x && u.y === cell.y);
-    if (unit) beginPointer(e, unit.uid, 'board');
-    else beginPointer(e, null, 'empty-cell', cell.x, cell.y);
-  });
-
-  // Tocar el banquillo vacio con una unidad seleccionada la manda de vuelta ahi.
-  document.getElementById('bench').addEventListener('click', (e) => {
-    if (!selectedUnit) return;
-    if (e.target.closest('.bench-unit')) return; // eso ya lo gestiona su propio listener
-    if (selectedUnit.origin === 'board') {
-      socket.emit('benchUnit', { uid: selectedUnit.uid });
-      setSelected(null, null);
-    }
-  });
-
-  // Tocar la zona de venta con una unidad seleccionada la vende.
-  document.getElementById('sell-zone').addEventListener('click', () => {
-    if (!selectedUnit) return;
-    socket.emit('sellUnit', { uid: selectedUnit.uid });
-    setSelected(null, null);
-  });
-
-  // ---------------- Render del tablero (fase de preparacion) ----------------
-  let redrawQueued = false;
-  function scheduleRedraw() {
-    if (redrawQueued) return;
-    redrawQueued = true;
-    requestAnimationFrame(() => {
-      redrawQueued = false;
-      if (!battleActive) drawPrepBoard();
-    });
-  }
-
-  function drawGridBase() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let row = 0; row < CELLS; row++) {
-      for (let col = 0; col < CELLS; col++) {
-        const enemyZone = row < 4;
-        ctx.fillStyle = enemyZone ? 'rgba(255,90,90,0.07)' : 'rgba(90,255,140,0.08)';
-        ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.strokeRect(col * CELL, row * CELL, CELL, CELL);
+  // Casillas libres de tu mitad, resaltadas al tener una ficha seleccionada
+  function highlightCells() {
+    if (!selectedUnit || !myState) return [];
+    const out = [];
+    for (let y = 0; y < rowsPerPlayer; y++) {
+      for (let x = 0; x < boardCols; x++) {
+        if (myState.you.board.some((u) => u.x === x && u.y === y)) continue;
+        out.push(prepToRender(x, y));
       }
     }
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.fillRect(0, 4 * CELL - 1, canvas.width, 2);
+    return out;
   }
 
-  function drawPrepBoard() {
-    drawGridBase();
-    if (!myState) return;
-    if (selectedUnit) {
-      // Resalta las celdas vacias de tu zona: ahi se colocaria la unidad seleccionada.
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 8; x++) {
-          if (myState.you.board.some((u) => u.x === x && u.y === y)) continue;
-          const row = 7 - y;
-          ctx.fillStyle = 'rgba(255,210,63,0.18)';
-          ctx.fillRect(x * CELL + 2, row * CELL + 2, CELL - 4, CELL - 4);
-        }
-      }
+  // ---------------- Sincronizacion del tablero 3D ----------------
+  function refreshBoard() {
+    if (!scene || !myState) return;
+    if (battleActive) return;
+    const units = [];
+    for (const u of myState.you.board) {
+      const ch = charDb[u.pokemonId];
+      if (!ch) continue;
+      const { col, row } = prepToRender(u.x, u.y);
+      units.push({
+        uid: u.uid,
+        char: { ...ch, star: u.star },
+        col, row,
+        selected: !!selectedUnit && selectedUnit.uid === u.uid,
+        showHp: false,
+      });
     }
-    for (const unit of myState.you.board) {
-      const col = unit.x;
-      const row = 7 - unit.y;
-      const isSelected = selectedUnit && selectedUnit.uid === unit.uid;
-      if (isSelected) {
-        ctx.save();
-        ctx.strokeStyle = '#ffd23f';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(col * CELL + CELL / 2, row * CELL + CELL / 2, CELL * 0.46, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      drawUnitAvatar(unit.pokemonId, unit.star, col * CELL + CELL / 2, row * CELL + CELL / 2, null, 0, null);
-    }
+    scene.syncUnits(units);
+    scene.setHighlights(highlightCells());
   }
 
-  // Dibuja el avatar de un personaje en el canvas: su retrato real si ya
-  // esta cargado, o si no un "cartel de se busca" (circulo con el color de
-  // su tripulacion e iniciales) mientras tanto. Capitanes llevan corona y
-  // anillo dorado en ambos casos.
-  function drawUnitAvatar(pokemonId, star, cx, cy, hpFrac, shieldFrac, sideColor, scale = 1) {
-    const p = charDb[pokemonId];
-    if (!p) return;
-    const size = CELL * 0.82 * scale;
-    const style = CREW_STYLE[p.crew] || { fill: '#26407a', ring: '#0e2140' };
-    const img = p.portrait ? getPortraitImage(p.portrait) : null;
-    const imgReady = !!(img && img.complete && img.naturalWidth);
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + size * 0.36, size * 0.32, size * 0.11, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fill();
-    if (sideColor) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, size * 0.55, 0, Math.PI * 2);
-      ctx.fillStyle = sideColor;
-      ctx.globalAlpha = 0.18;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-    if (imgReady) {
-      ctx.save();
-      ctx.clip();
-      ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = style.fill;
-      ctx.fill();
-    }
-    ctx.lineWidth = p.captain ? 4 : 2;
-    ctx.strokeStyle = p.captain ? '#ffd23f' : style.ring;
-    ctx.stroke();
-
-    if (!imgReady) {
-      ctx.fillStyle = '#fff';
-      ctx.font = `900 ${Math.round(size * 0.3)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(p.initials, cx, cy + 1);
-      ctx.textBaseline = 'alphabetic';
-    }
-
-    if (p.captain) {
-      ctx.font = `${Math.round(size * 0.36)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('👑', cx, cy - size * 0.38);
-    }
-
-    if (star) {
-      ctx.font = `${Math.round(size * 0.2)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffd23f';
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
-      const txt = '★'.repeat(star);
-      ctx.strokeText(txt, cx, cy - size / 2 - 4);
-      ctx.fillText(txt, cx, cy - size / 2 - 4);
-    }
-    if (hpFrac !== null && hpFrac !== undefined) {
-      const barW = size * 1.05;
-      const barH = 6;
-      const bx = cx - barW / 2;
-      const by = cy + size / 2 + 4;
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(bx, by, barW, barH);
-      ctx.fillStyle = hpFrac > 0.5 ? '#3ddc84' : hpFrac > 0.25 ? '#ffd23f' : '#ff5d6c';
-      ctx.fillRect(bx, by, barW * Math.max(0, hpFrac), barH);
-      if (shieldFrac > 0) {
-        ctx.strokeStyle = '#7fd8ff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx, by, barW, barH);
-      }
-    }
-    ctx.restore();
-  }
-
-  // ---------------- Animacion de batalla ----------------
-  socket.on('battleStart', ({ log, durationMs }) => {
+  // ---------------- Animacion de combate ----------------
+  socket.on('battleStart', ({ log }) => {
     battleLog = log;
     battleIdx = 0;
     battleUnits = new Map();
-    battleFx = [];
-    battleFloats = [];
     battleActive = true;
     battleStartTs = performance.now();
+    if (scene) scene.setHighlights([]);
+    setSelected(null);
     document.getElementById('battle-banner').classList.add('hidden');
     requestAnimationFrame(battleFrame);
   });
 
   function applyBattleEvent(e) {
+    const now = performance.now();
     switch (e.type) {
       case 'spawn':
         battleUnits.set(e.uid, {
           side: e.side, pokemonId: e.pokemonId, star: e.star,
           x: e.x, y: e.y, fromX: e.x, fromY: e.y, toX: e.x, toY: e.y,
           moveStart: 0, moveDur: 1,
-          hp: e.hp, maxHp: e.maxHp, shield: e.shield, maxShield: e.shield,
+          hp: e.hp, maxHp: e.maxHp,
           alive: true,
         });
         break;
@@ -676,50 +451,69 @@
         if (!u) break;
         u.fromX = u.x; u.fromY = u.y;
         u.toX = e.x; u.toY = e.y;
-        u.moveStart = performance.now();
-        u.moveDur = 420;
+        u.moveStart = now;
+        u.moveDur = 380;
         u.x = e.x; u.y = e.y;
         break;
       }
       case 'attack': {
         const u = battleUnits.get(e.uid);
         const t = battleUnits.get(e.target);
-        if (t) { t.hp = e.hp; t.shield = e.shield; }
-        if (u && t) {
-          battleFx.push({ from: { x: u.x, y: u.y }, to: { x: t.x, y: t.y }, createdAt: performance.now() });
-          battleFloats.push({ x: t.x, y: t.y, text: `-${e.damage}`, color: '#ff5d6c', createdAt: performance.now() });
+        if (t) t.hp = e.hp;
+        if (u && t && scene) {
+          const a = battleToRender(u.x, u.y);
+          const b = battleToRender(t.x, t.y);
+          scene.addAttackBeam(a.col, a.row, b.col, b.row);
+          scene.addFloatingText(b.col, b.row, `-${e.damage}`, '#ff8080');
         }
         break;
       }
       case 'chain': {
         const t = battleUnits.get(e.target);
-        if (t) t.hp = e.hp;
-        if (t) battleFloats.push({ x: t.x, y: t.y, text: `-${e.damage}⚡`, color: '#ffe36e', createdAt: performance.now() });
+        if (t) {
+          t.hp = e.hp;
+          const b = battleToRender(t.x, t.y);
+          if (scene) scene.addFloatingText(b.col, b.row, `-${e.damage}⚡`, '#ffe36e');
+        }
         break;
       }
       case 'burn': {
         const t = battleUnits.get(e.uid);
-        if (t) { t.hp = e.hp; battleFloats.push({ x: t.x, y: t.y, text: `-${e.damage}🔥`, color: '#ff8a4c', createdAt: performance.now() }); }
+        if (t) {
+          t.hp = e.hp;
+          const b = battleToRender(t.x, t.y);
+          if (scene) scene.addFloatingText(b.col, b.row, `-${e.damage}🔥`, '#ff9a4c');
+        }
         break;
       }
       case 'heal': {
         const t = battleUnits.get(e.uid);
-        if (t) { t.hp = e.hp; battleFloats.push({ x: t.x, y: t.y, text: `+${e.amount}`, color: '#3ddc84', createdAt: performance.now() }); }
+        if (t) {
+          t.hp = e.hp;
+          const b = battleToRender(t.x, t.y);
+          if (scene) scene.addFloatingText(b.col, b.row, `+${e.amount}`, '#6dffa8');
+        }
         break;
       }
       case 'dodge': {
         const t = battleUnits.get(e.uid);
-        if (t) battleFloats.push({ x: t.x, y: t.y, text: 'ESQUIVA', color: '#b6d8ff', createdAt: performance.now() });
+        if (t && scene) {
+          const b = battleToRender(t.x, t.y);
+          scene.addFloatingText(b.col, b.row, 'ESQUIVA', '#b6d8ff');
+        }
         break;
       }
       case 'stun': {
         const t = battleUnits.get(e.uid);
-        if (t) battleFloats.push({ x: t.x, y: t.y, text: 'ATURDIDO', color: '#a184ff', createdAt: performance.now() });
+        if (t && scene) {
+          const b = battleToRender(t.x, t.y);
+          scene.addFloatingText(b.col, b.row, 'ATURDIDO', '#c4a8ff');
+        }
         break;
       }
       case 'death': {
         const u = battleUnits.get(e.uid);
-        if (u) { u.alive = false; u.deathAt = performance.now(); }
+        if (u) { u.alive = false; u.deathAt = now; }
         break;
       }
       default:
@@ -735,11 +529,13 @@
       battleIdx++;
     }
 
-    drawGridBase();
+    const units = [];
     for (const [uid, u] of battleUnits) {
+      let fade = 1;
       if (!u.alive) {
         const age = now - (u.deathAt || now);
         if (age > 500) continue;
+        fade = Math.max(0, 1 - age / 500);
       }
       let px = u.toX, py = u.toY;
       if (u.moveStart && now - u.moveStart < u.moveDur) {
@@ -747,52 +543,75 @@
         px = u.fromX + (u.toX - u.fromX) * f;
         py = u.fromY + (u.toY - u.fromY) * f;
       }
-      const renderY = mySide === 'B' ? (CELLS - 1) - py : py;
-      const cx = px * CELL + CELL / 2;
-      const cy = renderY * CELL + CELL / 2;
-      const alpha = u.alive ? 1 : Math.max(0, 1 - (now - u.deathAt) / 500);
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      drawUnitAvatar(u.pokemonId, u.star, cx, cy, u.hp / u.maxHp, u.shield > 0 ? u.shield / (u.maxShield || 1) : 0, u.side === 'A' ? 'rgba(90,255,140,1)' : 'rgba(255,90,90,1)');
-      ctx.restore();
+      const ch = charDb[u.pokemonId];
+      if (!ch) continue;
+      const { col, row } = battleToRender(px, py);
+      units.push({
+        uid,
+        char: { ...ch, star: u.star },
+        col, row,
+        selected: false,
+        showHp: u.alive,
+        hpFrac: u.hp / u.maxHp,
+        opacity: fade,
+      });
     }
-
-    battleFx = battleFx.filter((fx) => now - fx.createdAt < 150);
-    for (const fx of battleFx) {
-      ctx.save();
-      ctx.globalAlpha = 1 - (now - fx.createdAt) / 150;
-      ctx.strokeStyle = '#ffd23f';
-      ctx.lineWidth = 2;
-      const fy = mySide === 'B' ? (CELLS - 1) - fx.from.y : fx.from.y;
-      const ty = mySide === 'B' ? (CELLS - 1) - fx.to.y : fx.to.y;
-      ctx.beginPath();
-      ctx.moveTo(fx.from.x * CELL + CELL / 2, fy * CELL + CELL / 2);
-      ctx.lineTo(fx.to.x * CELL + CELL / 2, ty * CELL + CELL / 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    battleFloats = battleFloats.filter((f) => now - f.createdAt < 800);
-    for (const f of battleFloats) {
-      const t = (now - f.createdAt) / 800;
-      ctx.save();
-      ctx.globalAlpha = 1 - t;
-      ctx.fillStyle = f.color;
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'center';
-      const fy = mySide === 'B' ? (CELLS - 1) - f.y : f.y;
-      ctx.fillText(f.text, f.x * CELL + CELL / 2, fy * CELL + CELL / 2 - 20 - t * 20);
-      ctx.restore();
-    }
+    if (scene) scene.syncUnits(units);
 
     const doneEvents = battleIdx >= battleLog.length;
     const lastEventTime = battleLog.length ? battleLog[battleLog.length - 1].t * TICK_MS : 0;
-    if (doneEvents && elapsed > lastEventTime + 600) {
+    if (doneEvents && elapsed > lastEventTime + 700) {
       battleActive = false;
-      scheduleRedraw();
+      refreshBoard();
       return;
     }
     requestAnimationFrame(battleFrame);
   }
 
+  // ---------------- Arranque de la escena 3D ----------------
+  function initScene() {
+    const container = document.getElementById('board-3d');
+    if (!container) return;
+    try {
+      scene = createScene(container);
+      scene.setBoard(boardCols, boardRows);
+    } catch (err) {
+      console.error('No se pudo iniciar la escena 3D:', err);
+      container.innerHTML = '<div class="webgl-error">Tu navegador no ha podido iniciar el modo 3D (WebGL).</div>';
+      return;
+    }
+
+    // Tocar una casilla: coloca la ficha seleccionada, o selecciona la que haya
+    container.addEventListener('pointerdown', (e) => {
+      if (!myState || myState.phase !== 'prep' || battleActive) return;
+      const cell = scene.pickCell(e.clientX, e.clientY);
+      if (!cell || !isMyHalfRow(cell.row)) return;
+      const { x, y } = renderToPrep(cell.col, cell.row);
+      const occupant = myState.you.board.find((u) => u.x === x && u.y === y);
+      if (selectedUnit) {
+        socket.emit('placeOnBoard', { uid: selectedUnit.uid, x, y });
+        setSelected(null);
+      } else if (occupant) {
+        setSelected({ uid: occupant.uid, origin: 'board' });
+      }
+    });
+  }
+
+  // Tocar el banquillo (fuera de una ficha) devuelve la seleccionada al banquillo
+  document.getElementById('bench').addEventListener('click', (e) => {
+    if (!selectedUnit) return;
+    if (e.target.closest('.bench-unit')) return;
+    if (selectedUnit.origin === 'board') {
+      socket.emit('benchUnit', { uid: selectedUnit.uid });
+      setSelected(null);
+    }
+  });
+
+  document.getElementById('sell-zone').addEventListener('click', () => {
+    if (!selectedUnit) return;
+    socket.emit('sellUnit', { uid: selectedUnit.uid });
+    setSelected(null);
+  });
+
+  initScene();
 })();

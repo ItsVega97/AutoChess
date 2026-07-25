@@ -8,11 +8,13 @@ const { simulateBattle, computeSynergies } = require('./battle');
 const PREP_MS = 30000;
 const RESULT_MS = 6000;
 const RECONNECT_GRACE_MS = 30000;
-const START_HP = 100;
+const START_HP = 20;
 const START_GOLD = 10;
-const BENCH_SIZE = 9;
-const BOARD_COLS = 8;
-const BOARD_ROWS_PLAYER = 4;
+const BENCH_SIZE = 6;
+// Tablero compacto estilo Tactics Royale: 5 columnas y 3 filas por jugador
+// (5x6 en total al enfrentar las dos mitades).
+const BOARD_COLS = 5;
+const BOARD_ROWS_PLAYER = 3;
 
 let roomCounter = 0;
 

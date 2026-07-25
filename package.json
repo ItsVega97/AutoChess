@@ -1,7 +1,7 @@
 {
-  "name": "pokemon-autochess",
-  "version": "1.0.0",
-  "description": "Demo jugable online de un AutoChess tematico Pokemon, al estilo Clash Royale: Tactics Royale.",
+  "name": "nakama-royale",
+  "version": "2.0.0",
+  "description": "Autobattler online 3D con tematica One Piece, al estilo Clash Royale: Tactics Royale.",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
