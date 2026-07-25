@@ -403,29 +403,60 @@ export function createScene(container) {
     });
   }
 
+  // Instancias ya parseadas que han quedado libres, por personaje. Entre ronda
+  // y ronda las fichas se destruyen y se vuelven a crear: reutilizarlas evita
+  // volver a parsear el .glb (y el parpadeo del cartel mientras tanto).
+  const modelPool = new Map();
+  function takeFromPool(char) {
+    const libres = modelPool.get(char.id);
+    return libres && libres.length ? libres.pop() : null;
+  }
+  function returnToPool(char, res) {
+    let libres = modelPool.get(char.id);
+    if (!libres) modelPool.set(char.id, (libres = []));
+    if (libres.length < 8) libres.push(res); // tope por si acaso
+    else disposeTree(res.root);
+  }
+
   // Sustituye el cartel de una ficha por su modelo 3D cuando este disponible
   function attachModel(tok, char) {
+    // Si ya hay una instancia libre la ponemos en el mismo momento, sin esperar
+    const libre = takeFromPool(char);
+    if (libre) { useModel(tok, char, libre); return; }
     instantiateModel(char).then((res) => {
       if (!res) return;                                   // no hay modelo: se queda el cartel
-      if (!tok.group.parent) { disposeTree(res.root); return; } // la ficha ya no existe
-      tok.group.add(res.root);
-      tok.model = res.root;
-      tok.model.position.y = 0.12; // de pie sobre la peana, no atravesandola
-      tok.model.rotation.y = tok.facing || 0; // orientacion ya calculada en syncUnits
-      tok.panel.visible = false;
-
-      // El cartel llevaba las estrellas dibujadas: con modelo hace falta
-      // mostrarlas aparte para seguir sabiendo el nivel de cada ficha.
-      tok.badge = makeStarBadge(tok.star);
-      tok.group.add(tok.badge);
-
-      if (res.animations.length) {
-        const mixer = new THREE.AnimationMixer(res.root);
-        mixer.clipAction(res.animations[0]).play();
-        tok.mixer = mixer;
-        mixers.add(mixer);
-      }
+      if (!tok.group.parent) { returnToPool(char, res); return; } // la ficha ya no existe
+      useModel(tok, char, res);
     });
+  }
+
+  function useModel(tok, char, res) {
+    tok.instancia = res;
+    tok.char = char;
+    setModelOpacity(res.root, 1); // pudo quedar a medias de un desvanecido
+    tok.fade = 1;
+    tok.group.add(res.root);
+    tok.model = res.root;
+    tok.model.rotation.y = tok.facing || 0; // orientacion ya calculada en syncUnits
+
+    // El modelo va solo sobre la cubierta: fuera el cartel y fuera la peana.
+    // Se queda la sombra para que no parezca que flota, y el aro dorado del
+    // capitan bajado a ras de suelo.
+    tok.panel.visible = false;
+    tok.base.visible = false;
+    if (tok.ring) tok.ring.position.y = 0.03;
+
+    // El cartel llevaba el nombre y las estrellas dibujados: con modelo hay
+    // que ponerlos aparte para seguir sabiendo quien es y de que nivel va.
+    tok.badge = makeNameBadge(char, tok.star);
+    tok.group.add(tok.badge);
+
+    if (res.animations.length) {
+      const mixer = new THREE.AnimationMixer(res.root);
+      mixer.clipAction(res.animations[0]).play();
+      tok.mixer = mixer;
+      mixers.add(mixer);
+    }
   }
 
   function releaseModel(tok) {
@@ -434,8 +465,16 @@ export function createScene(container) {
       mixers.delete(tok.mixer);
       tok.mixer = null;
     }
-    // La chapita de estrellas comparte textura entre fichas: hay que sacarla
-    // del grupo antes de destruirlo para que no se lleve la textura por delante.
+    // El modelo se guarda para la siguiente ficha del mismo personaje en vez de
+    // destruirlo: hay que sacarlo del grupo antes de que se libere el resto.
+    if (tok.instancia) {
+      tok.group.remove(tok.instancia.root);
+      returnToPool(tok.char, tok.instancia);
+      tok.instancia = null;
+      tok.model = null;
+    }
+    // La etiqueta comparte textura entre fichas iguales: hay que sacarla del
+    // grupo antes de destruirlo para que no se lleve la textura por delante.
     if (tok.badge) {
       tok.group.remove(tok.badge);
       tok.badge.material.dispose();
@@ -443,35 +482,79 @@ export function createScene(container) {
     }
   }
 
-  // Chapita con las estrellas, para las fichas que usan modelo 3D
-  const starTextures = new Map();
-  function starTexture(star) {
+  // Etiqueta flotante con el nombre y las estrellas, para las fichas que usan
+  // modelo 3D: al no tener el cartel, es lo unico que dice quien es y de que
+  // nivel va.
+  const labelTextures = new Map();
+  const LABEL_W = 256;
+  const LABEL_H = 64;
+  function labelTexture(name, star, crew) {
     const n = Math.max(1, star || 1);
-    let tex = starTextures.get(n);
-    if (tex) return tex;
+    const key = `${name}|${n}`;
+    const cached = labelTextures.get(key);
+    if (cached) return cached;
+
     const c = document.createElement('canvas');
-    c.width = 128; c.height = 40;
+    c.width = LABEL_W; c.height = LABEL_H;
     const g = c.getContext('2d');
-    g.fillStyle = 'rgba(12,16,28,0.72)';
-    roundRect(g, 2, 2, 124, 36, 12);
+    const estrellas = '★'.repeat(n);
+
+    // Todo en una linea: "Nombre ★★". La letra encoge si el nombre es largo
+    // o si lleva muchas estrellas, para que la chapa no crezca sin control.
+    let size = 30;
+    const medir = () => {
+      g.font = `bold ${size}px system-ui, sans-serif`;
+      const wn = g.measureText(`${name} `).width;
+      g.font = `bold ${size - 4}px system-ui, sans-serif`;
+      return { wn, we: g.measureText(estrellas).width };
+    };
+    let m = medir();
+    while (m.wn + m.we > LABEL_W - 30 && size > 15) {
+      size -= 2;
+      m = medir();
+    }
+
+    const anchoTexto = m.wn + m.we;
+    const anchoCaja = Math.min(LABEL_W - 4, anchoTexto + 26);
+    const x0 = (LABEL_W - anchoCaja) / 2;
+    const y0 = (LABEL_H - 44) / 2;
+
+    g.fillStyle = 'rgba(9,20,38,0.84)';
+    roundRect(g, x0, y0, anchoCaja, 44, 13);
     g.fill();
-    g.fillStyle = '#ffd23f';
-    g.font = 'bold 24px system-ui, sans-serif';
-    g.textAlign = 'center';
+    g.strokeStyle = CREW_COLORS[crew] || 'rgba(255,255,255,.5)';
+    g.lineWidth = 3;
+    roundRect(g, x0, y0, anchoCaja, 44, 13);
+    g.stroke();
+
+    // El texto se dibuja de izquierda a derecha desde el centro de la chapa
+    const xIni = (LABEL_W - anchoTexto) / 2;
+    g.textAlign = 'left';
     g.textBaseline = 'middle';
-    g.fillText('★'.repeat(n), 64, 21);
-    tex = new THREE.CanvasTexture(c);
+    g.fillStyle = '#ffffff';
+    g.font = `bold ${size}px system-ui, sans-serif`;
+    g.fillText(`${name} `, xIni, LABEL_H / 2 + 1);
+    g.fillStyle = '#ffd23f';
+    g.font = `bold ${size - 4}px system-ui, sans-serif`;
+    g.fillText(estrellas, xIni + m.wn, LABEL_H / 2 + 1);
+
+    const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    starTextures.set(n, tex);
+    labelTextures.set(key, tex);
     return tex;
   }
 
-  function makeStarBadge(star) {
+  // Alto de la chapa en unidades de mundo y altura a la que flota: justo
+  // encima de la cabeza del modelo (MODEL_HEIGHT) y por debajo de las barras
+  // de vida y mana, que van a 1.62 y 1.49.
+  const LABEL_SCALE = 0.9;
+  function makeNameBadge(char, star) {
+    const alto = LABEL_SCALE * (LABEL_H / LABEL_W);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: starTexture(star), transparent: true, depthTest: false,
+      map: labelTexture(char.name, star, char.crew), transparent: true, depthTest: false,
     }));
-    sprite.scale.set(0.62, 0.2, 1);
-    sprite.position.set(0, 1.34, 0);
+    sprite.scale.set(LABEL_SCALE, alto, 1);
+    sprite.position.set(0, MODEL_HEIGHT + alto / 2 + 0.08, 0);
     sprite.renderOrder = 4;
     return sprite;
   }
@@ -486,8 +569,9 @@ export function createScene(container) {
     base.position.y = 0.06;
     group.add(base);
 
+    let ring = null;
     if (char.captain) {
-      const ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({
+      ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({
         color: '#ffd23f', roughness: 0.3, metalness: 0.7,
       }));
       ring.rotation.x = -Math.PI / 2;
@@ -542,7 +626,7 @@ export function createScene(container) {
 
     world.add(group);
     const tok = {
-      group, panel, base, hpBack, hpFill, manaBack, manaFill, panelMat,
+      group, panel, base, ring, hpBack, hpFill, manaBack, manaFill, panelMat,
       star: char.star || 1, model: null, mixer: null, badge: null,
     };
     // Si el personaje tiene un .glb subido, sustituye al cartel al llegar
@@ -570,7 +654,7 @@ export function createScene(container) {
         tok.star = u.char.star;
         tok.panelMat.map = getCharTexture(u.char);
         tok.panelMat.needsUpdate = true;
-        if (tok.badge) tok.badge.material.map = starTexture(tok.star);
+        if (tok.badge) tok.badge.material.map = labelTexture(u.char.name, tok.star, u.char.crew);
       }
       const { x, z } = cellToWorld(u.col, u.row);
       tok.group.position.set(x, 0, z);
@@ -836,6 +920,8 @@ export function createScene(container) {
   function dispose() {
     running = false;
     mixers.clear();
+    for (const libres of modelPool.values()) for (const res of libres) disposeTree(res.root);
+    modelPool.clear();
     renderer.dispose();
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }

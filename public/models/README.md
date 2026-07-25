@@ -44,8 +44,9 @@ No hace falta tenerlos todos: puedes ir subiéndolos de uno en uno.
 - El juego reescala cada modelo automáticamente a la altura de una casilla, lo
   centra y lo gira hacia el bando contrario, así que no te preocupes por la
   escala ni por el origen del modelo.
-- Sobre cada modelo se sigue mostrando su nivel de estrellas, la barra de vida y
-  la de maná, igual que en las fichas planas.
+- Un personaje con modelo pierde la peana y el cartel: se le pone una chapita
+  con su nombre y sus estrellas encima de la cabeza, y mantiene las barras de
+  vida y maná durante el combate.
 
 ## Dónde conseguirlos
 
