@@ -10,9 +10,15 @@ const BOARD_COLS = 5;
 const BOARD_ROWS = 6;
 
 function computeSynergies(board) {
+  // Solo cuentan los personajes DISTINTOS: llevar dos Marco es un solo miembro
+  // de Barbablanca a efectos del combo, no dos.
+  const vistos = {};
   const counts = {};
   for (const u of board) {
     const p = CHARACTERS_BY_ID[u.pokemonId];
+    const yaContado = vistos[p.crew] || (vistos[p.crew] = new Set());
+    if (yaContado.has(p.id)) continue;
+    yaContado.add(p.id);
     counts[p.crew] = (counts[p.crew] || 0) + 1;
   }
   const active = {}; // crew -> merged bonus object

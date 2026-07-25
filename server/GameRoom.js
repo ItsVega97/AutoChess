@@ -8,7 +8,7 @@ const { simulateBattle, computeSynergies } = require('./battle');
 const PREP_MS = 30000;
 const RESULT_MS = 6000;
 const RECONNECT_GRACE_MS = 30000;
-const START_HP = 20;
+const START_HP = 12;
 const START_GOLD = 10;
 const BENCH_SIZE = 6;
 // Tablero compacto estilo Tactics Royale: 5 columnas y 3 filas por jugador
@@ -109,7 +109,9 @@ class GameRoom {
       if (!p.alive) continue;
       p.round = this.round;
       p.maxTeam = teamSizeForRound(this.round);
-      p.shop = rollShop();
+      // La tienda NO se renueva entre rondas: lo que no compraste sigue ahi.
+      // Solo cambia al comprar (o la primera vez, que hay que llenarla).
+      if (this.round === 1) p.shop = rollShop();
       p.ready = false;
       const streak = Math.max(p.winStreak, p.lossStreak);
       if (this.round > 1) p.gold += goldIncome(p.gold, streak);
@@ -339,13 +341,13 @@ class GameRoom {
     if (result.winner === 'A') {
       a.winStreak++; a.lossStreak = 0;
       b.lossStreak++; b.winStreak = 0;
-      const dmg = roundDamage(this.round, result.survivorsA.map((u) => ({ cost: CHARACTERS_BY_ID[u.pokemonId].cost, star: u.star })));
+      const dmg = roundDamage(result.survivorsA);
       b.hp = Math.max(0, b.hp - dmg);
       this.lastRoundInfo = { winnerSide: 'A', damage: dmg };
     } else if (result.winner === 'B') {
       b.winStreak++; b.lossStreak = 0;
       a.lossStreak++; a.winStreak = 0;
-      const dmg = roundDamage(this.round, result.survivorsB.map((u) => ({ cost: CHARACTERS_BY_ID[u.pokemonId].cost, star: u.star })));
+      const dmg = roundDamage(result.survivorsB);
       a.hp = Math.max(0, a.hp - dmg);
       this.lastRoundInfo = { winnerSide: 'B', damage: dmg };
     } else {

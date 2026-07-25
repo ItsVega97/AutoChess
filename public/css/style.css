@@ -61,7 +61,16 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .btn:disabled { filter: grayscale(0.6); opacity: .6; cursor: not-allowed; }
 
 /* ---------- Menu ---------- */
-#screen-menu.active, #screen-loading.active { display: flex; align-items: center; justify-content: center; padding: 24px; }
+#screen-loading.active { display: flex; align-items: center; justify-content: center; padding: 24px; }
+/* El menu es una columna: tarjeta de juego arriba y Wiki Pirata debajo, con
+   scroll normal de pagina (dentro de la partida el scroll si esta bloqueado). */
+#screen-menu.active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 24px 16px 40px;
+}
 .menu-card {
   background: rgba(12, 30, 58, .78);
   border: 3px solid rgba(255,255,255,.15);
@@ -437,4 +446,65 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   .bench-unit .unit-avatar { width: 27px; height: 27px; font-size: 10px; }
   .bench { min-height: 46px; }
   .bench-slot { width: 38px; height: 38px; }
+}
+
+
+/* ---------- Wiki Pirata (pantalla de inicio) ---------- */
+.wiki { width: 100%; max-width: 560px; }
+.wiki-title { font-size: 20px; margin: 0 0 4px; text-align: center; }
+.wiki-sub { font-size: 12px; opacity: .75; text-align: center; margin: 0 0 14px; }
+.wiki-crews { display: flex; flex-direction: column; gap: 8px; }
+
+.wiki-crew {
+  background: rgba(12, 30, 58, .78);
+  border: 2px solid rgba(255,255,255,.13);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.wiki-crew-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  text-align: left;
+}
+.wiki-crew-head .wc-icon { font-size: 19px; }
+.wiki-crew-head .wc-name { flex: 1 1 auto; }
+.wiki-crew-head .wc-open { opacity: .6; transition: transform .18s ease; }
+.wiki-crew.open .wc-open { transform: rotate(180deg); }
+
+.wiki-crew-body { display: none; padding: 0 14px 14px; }
+.wiki-crew.open .wiki-crew-body { display: block; }
+.wiki-desc { font-size: 12px; opacity: .8; margin: 0 0 10px; }
+.wiki-tiers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+
+.wiki-members { display: flex; flex-direction: column; gap: 8px; }
+.wiki-card {
+  background: rgba(8, 20, 40, .7);
+  border: 1px solid rgba(255,255,255,.12);
+  border-left: 4px solid var(--crew, rgba(255,255,255,.3));
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.wiki-card.captain { border-color: rgba(255,210,63,.55); border-left-color: var(--gold); }
+.wiki-card-head { display: flex; align-items: center; gap: 10px; }
+.wiki-card-head .unit-avatar { width: 52px; height: 52px; font-size: 15px; flex: 0 0 auto; }
+.wiki-card-title { flex: 1 1 auto; min-width: 0; }
+.wiki-card-name { font-weight: 800; font-size: 14px; }
+.wiki-card-cost { font-size: 12px; opacity: .8; }
+.wiki-card-stats { font-size: 12px; opacity: .85; margin-top: 8px; }
+.wiki-card-ability { margin-top: 8px; font-size: 12px; line-height: 1.45; }
+.wiki-card-ability b { color: #9fd4ff; }
+.wiki-card-desc { opacity: .85; margin-top: 2px; }
+
+@media (max-width: 720px) {
+  .wiki-title { font-size: 18px; }
+  .wiki-card-head .unit-avatar { width: 46px; height: 46px; }
 }

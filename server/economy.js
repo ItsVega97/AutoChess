@@ -70,14 +70,11 @@ function goldIncome(gold, streak) {
   return base + interest + streakBonus;
 }
 
-// Con 20 puntos de vida el dano por ronda tiene que ser pequeno: contamos
-// cuantas unidades sobrevivieron (no su coste, que se dispara al fusionar) y
-// lo limitamos, de forma que perder cuesta ~2-3 al principio y ~5-6 al final.
-// Asi una partida dura del orden de 5-7 derrotas.
-const MAX_ROUND_DAMAGE = 6;
-function roundDamage(round, survivors) {
-  const base = 1 + Math.floor(round / 4);
-  return Math.min(MAX_ROUND_DAMAGE, base + Math.ceil(survivors.length / 2));
+// Dano por ronda al estilo Tactics Royale: cada tropa que sobrevive al ganador
+// hace 1 de dano, mas 1 fijo por haber ganado el combate. Con 12 de vida, ganar
+// con dos supervivientes quita 3, y una partida se resuelve en 4-6 derrotas.
+function roundDamage(survivors) {
+  return 1 + survivors.length;
 }
 
 module.exports = {

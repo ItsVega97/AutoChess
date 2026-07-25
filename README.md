@@ -7,8 +7,8 @@ automáticos por rondas contra otro jugador en tiempo real (o contra una IA para
 probarlo tú solo al instante).
 
 El combate se juega sobre la **cubierta 3D de un barco pirata** renderizada con
-Three.js, con un tablero compacto de 5x3 casillas por jugador y 20 puntos de vida
-cada uno — partidas rápidas, de unas 8-14 rondas.
+Three.js, con un tablero compacto de 5x3 casillas por jugador y 12 puntos de vida
+cada uno — partidas rápidas, de unas 5-8 rondas.
 
 La escena 3D ocupa toda la pantalla y la interfaz va **superpuesta** encima
 (estilo Tactics Royale), de modo que la partida entra siempre en una sola
@@ -57,7 +57,8 @@ arranque `npm start` y puerto por `process.env.PORT`).
    seleccionarlos y luego toca una casilla de tu mitad de la cubierta para
    colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
    La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
-   uno**: es la única forma de cambiar la oferta, no hay botón de reroll.
+   uno**: es la única forma de cambiar la oferta, no hay botón de reroll. Entre
+   rondas **no cambia**, así que lo que no compraste sigue esperándote.
    Los **40 personajes están disponibles desde la primera ronda**, capitanes
    incluidos: lo que cambia es lo raro que es que salga cada uno según su coste.
 
@@ -72,13 +73,15 @@ arranque `npm start` y puerto por `process.env.PORT`).
    Con 4 huecos, eso es un **18,5% de tiendas con capitán**: puedes fichar a
    Shanks en la ronda 1 si tienes suerte y te gastas medio bolsillo en él.
 2. **Combate automático**: tu tripulación lucha sola contra la del rival, con la
-   formación exacta en la que la colocaste. Gana quien deje unidades vivas; el
-   perdedor pierde vida según lo que sobrevivió al ganador.
+   formación exacta en la que la colocaste. Gana quien deje unidades vivas. El
+   daño va como en Tactics Royale: **1 punto por cada tropa que le sobreviva al
+   ganador, más 1 por haber ganado**. Ganar con dos tropas en pie quita 3 de los
+   12 puntos de vida del rival.
 3. **Cupo de tropas**: empiezas pudiendo desplegar **una sola tropa**, y ganas un
    hueco después de cada combate hasta un máximo de **6**. El marcador de arriba
    (⚔️ 3/4) dice cuántas llevas en cubierta y cuántas te caben; no es un nivel.
    Con el cupo lleno solo puedes cambiar una tropa por otra del banquillo.
-   La partida acaba cuando uno de los dos llega a 0 de sus 20 puntos de vida.
+   La partida acaba cuando uno de los dos llega a 0 de sus 12 puntos de vida.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 5. **Vender**: selecciona una ficha y toca la papelera (que te dice por cuánto
@@ -100,6 +103,9 @@ legendaria (coste 5). Con 2 miembros en tu equipo activas el nivel I, con 4 el
 nivel II, y si reúnes **la tripulación completa (los 5, con capitán incluido)**
 se activa un nivel III definitivo.
 
+Solo cuentan los personajes **distintos**: llevar dos Marco en la cubierta suma
+un miembro de Barbablanca, no dos.
+
 | Tripulación | Combo | Efecto |
 |---|---|---|
 | 🏴‍☠️ Sombrero de Paja (capitán: Luffy) | Voluntad heredada | Más ataque para todo el equipo |
@@ -113,10 +119,22 @@ se activa un nivel III definitivo.
 
 Roster: 40 personajes (5 por tripulación).
 
+## Wiki Pirata
+
+La pantalla de inicio lleva debajo una **Wiki Pirata**: una fila por tripulación
+que, al abrirla, muestra su combo con los tres niveles y la ficha de sus cinco
+personajes — retrato, coste, estadísticas y habilidad. Los retratos se generan
+del propio modelo 3D del personaje, y los modelos de una tripulación solo se
+descargan al abrirla.
+
 ## Imágenes de los personajes
 
-Cada personaje puede tener un retrato propio. Se usa tanto en la tienda y el
-banquillo (2D) como en el "cartel de se busca" de su ficha 3D en la cubierta.
+El retrato que se ve en la tienda, el banquillo y la Wiki se **renderiza del
+modelo 3D** del personaje (medio cuerpo, con las luces de la cubierta) y se
+cachea. Los que todavía no tienen modelo muestran sus iniciales.
+
+Si además quieres darle a alguno una imagen 2D propia, tiene prioridad sobre el
+retrato generado:
 
 1. Guarda la imagen en `public/img/characters/` (por ejemplo `luffy.jpg`).
 2. Añade la entrada en el objeto `PORTRAITS` de `server/characterData.js`:

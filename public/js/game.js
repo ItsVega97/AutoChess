@@ -1,6 +1,7 @@
 'use strict';
 
 import { createScene } from './scene3d.js';
+import { getThumb, getThumbSync } from './thumbs.js';
 
 (() => {
   const socket = io();
@@ -142,6 +143,72 @@ import { createScene } from './scene3d.js';
     wrap.innerHTML = '';
     for (const [crew, def] of Object.entries(crewDb)) {
       wrap.appendChild(el('div', 'ci', `${def.icon} ${def.label}`));
+    }
+    renderWiki();
+  }
+
+  // ---------------- Wiki Pirata (pantalla de inicio) ----------------
+  // Una fila por tripulacion; al abrirla se ven sus niveles de combo y la ficha
+  // de sus cinco personajes, con su retrato y su habilidad.
+  function renderWiki() {
+    const wrap = document.getElementById('wiki-crews');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    for (const [slug, def] of Object.entries(crewDb)) {
+      const bloque = el('div', 'wiki-crew');
+
+      const cabecera = el('button', 'wiki-crew-head');
+      cabecera.innerHTML = `<span class="wc-icon">${def.icon}</span>
+        <span class="wc-name">${def.label}</span>
+        <span class="wc-open">▾</span>`;
+      bloque.appendChild(cabecera);
+
+      const cuerpo = el('div', 'wiki-crew-body');
+      bloque.appendChild(cuerpo);
+
+      // El contenido se monta la primera vez que se abre: los retratos salen de
+      // los modelos 3D y no tiene sentido descargar los 40 al abrir la pagina.
+      let montado = false;
+      const montar = () => {
+        if (montado) return;
+        montado = true;
+        cuerpo.appendChild(el('p', 'wiki-desc', def.desc || ''));
+
+        const niveles = el('div', 'wiki-tiers');
+        for (const t of def.tiers || []) {
+          niveles.appendChild(el('div', 'tt-tier', `<b>${t.n}</b> <span>${t.text}</span>`));
+        }
+        cuerpo.appendChild(niveles);
+
+        const fichas = el('div', 'wiki-members');
+        for (const m of def.members || []) {
+          const p = charDb[m.id];
+          if (!p) continue;
+          const ficha = el('div', `wiki-card uc-crew-${slug}${p.captain ? ' captain' : ''}`);
+          const cabeza = el('div', 'wiki-card-head');
+          cabeza.appendChild(makeAvatarEl(p));
+          const titulo = el('div', 'wiki-card-title');
+          titulo.appendChild(el('div', 'wiki-card-name', `${p.captain ? '👑 ' : ''}${p.name}`));
+          titulo.appendChild(el('div', 'wiki-card-cost', `${p.cost} 🪙`));
+          cabeza.appendChild(titulo);
+          ficha.appendChild(cabeza);
+          ficha.appendChild(el('div', 'wiki-card-stats',
+            `❤️ ${p.hp} &nbsp; ⚔️ ${p.atk} &nbsp; 🛡️ ${p.def} &nbsp; 🎯 ${p.range}`));
+          if (p.ability) {
+            ficha.appendChild(el('div', 'wiki-card-ability',
+              `<b>⚡ ${p.ability.name}</b> <span class="tt-mana">${p.ability.mana} maná</span>
+               <div class="wiki-card-desc">${p.ability.desc}</div>`));
+          }
+          fichas.appendChild(ficha);
+        }
+        cuerpo.appendChild(fichas);
+      };
+
+      cabecera.addEventListener('click', () => {
+        montar();
+        bloque.classList.toggle('open');
+      });
+      wrap.appendChild(bloque);
     }
   }
 
@@ -328,6 +395,15 @@ import { createScene } from './scene3d.js';
   document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
 
   // ---------------- Avatares 2D (tienda / banquillo) ----------------
+  function pintarRetrato(avatar, url) {
+    avatar.textContent = '';
+    avatar.classList.add('unit-avatar-img');
+    const img = el('img');
+    img.src = url;
+    img.alt = '';
+    avatar.appendChild(img);
+  }
+
   function makeAvatarEl(p) {
     if (p.portrait) {
       const wrap = el('div', `unit-avatar unit-avatar-img${p.captain ? ' captain' : ''}`);
@@ -341,8 +417,14 @@ import { createScene } from './scene3d.js';
       wrap.appendChild(img);
       return wrap;
     }
+    // Sin imagen 2D pero con modelo 3D: usamos un retrato sacado del modelo,
+    // que es lo que hace reconocible la tarjeta de un vistazo. Mientras llega
+    // (o si el personaje no tiene modelo todavia) se ven sus iniciales.
     const avatar = el('div', 'unit-avatar', p.initials);
     if (p.captain) avatar.classList.add('captain');
+    const yaHecho = getThumbSync(p);
+    if (yaHecho) pintarRetrato(avatar, yaHecho);
+    else getThumb(p).then((url) => { if (url) pintarRetrato(avatar, url); });
     return avatar;
   }
 
