@@ -723,6 +723,7 @@ import { createScene } from './scene3d.js';
       // un punto de la pantalla (sirve para verificar que el tablero entero
       // queda visible y no debajo de la interfaz).
       window.__pickCellForTest = (x, y) => scene.pickCell(x, y);
+      window.__sceneForTest = scene;
     } catch (err) {
       console.error('No se pudo iniciar la escena 3D:', err);
       container.innerHTML = '<div class="webgl-error">Tu navegador no ha podido iniciar el modo 3D (WebGL).</div>';

@@ -10,6 +10,7 @@
  */
 
 import * as THREE from '../vendor/three.module.min.js';
+import { GLTFLoader } from '../vendor/GLTFLoader.js';
 
 const TILE = 1.0;          // tamano de casilla en unidades del mundo
 const DECK_MARGIN = 1.15;  // cubierta extra alrededor del tablero
@@ -321,6 +322,155 @@ export function createScene(container) {
     return tex;
   }
 
+  // ---------------- Modelos 3D opcionales ----------------
+  // Si existe public/models/<tripulacion>/<id>.glb se usa en lugar del cartel.
+  // Se intenta una sola vez por personaje; si no esta (404) o falla, se queda
+  // el cartel para siempre y no se vuelve a pedir.
+  const gltfLoader = new GLTFLoader();
+  const modelFiles = new Map();   // charId -> ArrayBuffer | null (null = no hay modelo)
+  const modelPending = new Map(); // charId -> Promise<ArrayBuffer|null>
+  const mixers = new Set();       // animaciones activas, una por ficha con modelo
+  const MODEL_HEIGHT = 1.15;      // alto objetivo, similar al del cartel
+
+  // El servidor nos dice de una sola vez que personajes tienen modelo subido,
+  // asi no pedimos 40 archivos que en su mayoria no existen. Si el endpoint no
+  // esta (version antigua del servidor), se prueba el archivo directamente.
+  let modelIndex = null;
+  function modelExists(char) {
+    if (!modelIndex) {
+      modelIndex = fetch('api/models')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => (d && Array.isArray(d.models) ? new Set(d.models) : null))
+        .catch(() => null);
+    }
+    return modelIndex.then((set) => !set || set.has(`${char.crew}/${char.id}`));
+  }
+
+  // Descarga el .glb una sola vez por personaje. Si no existe se recuerda el
+  // fallo (null) y no se vuelve a pedir: esa ficha se queda con su cartel.
+  function fetchModelFile(char) {
+    if (modelFiles.has(char.id)) return Promise.resolve(modelFiles.get(char.id));
+    if (modelPending.has(char.id)) return modelPending.get(char.id);
+
+    const url = `models/${char.crew}/${char.id}.glb`;
+    const p = modelExists(char)
+      .then((hay) => (hay ? fetch(url) : null))
+      .then((r) => (r && r.ok ? r.arrayBuffer() : null))
+      // un .glb empieza por "glTF": si llega otra cosa (una pagina de error,
+      // por ejemplo) lo descartamos antes de intentar parsearlo
+      .then((buf) => (buf && buf.byteLength > 12 && new DataView(buf).getUint32(0, true) === 0x46546c67 ? buf : null))
+      .catch(() => null)
+      .then((buf) => {
+        modelFiles.set(char.id, buf);
+        modelPending.delete(char.id);
+        return buf;
+      });
+    modelPending.set(char.id, p);
+    return p;
+  }
+
+  // Cada ficha necesita su propia copia (esqueletos y animaciones no se pueden
+  // compartir), asi que parseamos el mismo buffer una vez por ficha.
+  function instantiateModel(char) {
+    return fetchModelFile(char).then((buf) => {
+      if (!buf) return null;
+      return new Promise((resolve) => {
+        gltfLoader.parse(
+          buf.slice(0),
+          '',
+          (gltf) => {
+            const raiz = gltf.scene;
+            // El modelo puede venir a cualquier escala y con el origen en
+            // cualquier sitio: lo centramos y lo ajustamos al alto de casilla.
+            const caja = new THREE.Box3().setFromObject(raiz);
+            const tam = caja.getSize(new THREE.Vector3());
+            const centro = caja.getCenter(new THREE.Vector3());
+            const escala = tam.y > 0.0001 ? MODEL_HEIGHT / tam.y : 1;
+            raiz.scale.setScalar(escala);
+            raiz.position.set(-centro.x * escala, -caja.min.y * escala, -centro.z * escala);
+
+            const envoltorio = new THREE.Group();
+            envoltorio.add(raiz);
+            resolve({ root: envoltorio, animations: gltf.animations || [] });
+          },
+          () => resolve(null)
+        );
+      });
+    });
+  }
+
+  // Sustituye el cartel de una ficha por su modelo 3D cuando este disponible
+  function attachModel(tok, char) {
+    instantiateModel(char).then((res) => {
+      if (!res) return;                                   // no hay modelo: se queda el cartel
+      if (!tok.group.parent) { disposeTree(res.root); return; } // la ficha ya no existe
+      tok.group.add(res.root);
+      tok.model = res.root;
+      tok.model.rotation.y = tok.facing || 0; // orientacion ya calculada en syncUnits
+      tok.panel.visible = false;
+
+      // El cartel llevaba las estrellas dibujadas: con modelo hace falta
+      // mostrarlas aparte para seguir sabiendo el nivel de cada ficha.
+      tok.badge = makeStarBadge(tok.star);
+      tok.group.add(tok.badge);
+
+      if (res.animations.length) {
+        const mixer = new THREE.AnimationMixer(res.root);
+        mixer.clipAction(res.animations[0]).play();
+        tok.mixer = mixer;
+        mixers.add(mixer);
+      }
+    });
+  }
+
+  function releaseModel(tok) {
+    if (tok.mixer) {
+      tok.mixer.stopAllAction();
+      mixers.delete(tok.mixer);
+      tok.mixer = null;
+    }
+    // La chapita de estrellas comparte textura entre fichas: hay que sacarla
+    // del grupo antes de destruirlo para que no se lleve la textura por delante.
+    if (tok.badge) {
+      tok.group.remove(tok.badge);
+      tok.badge.material.dispose();
+      tok.badge = null;
+    }
+  }
+
+  // Chapita con las estrellas, para las fichas que usan modelo 3D
+  const starTextures = new Map();
+  function starTexture(star) {
+    const n = Math.max(1, star || 1);
+    let tex = starTextures.get(n);
+    if (tex) return tex;
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 40;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(12,16,28,0.72)';
+    roundRect(g, 2, 2, 124, 36, 12);
+    g.fill();
+    g.fillStyle = '#ffd23f';
+    g.font = 'bold 24px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('★'.repeat(n), 64, 21);
+    tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    starTextures.set(n, tex);
+    return tex;
+  }
+
+  function makeStarBadge(star) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: starTexture(star), transparent: true, depthTest: false,
+    }));
+    sprite.scale.set(0.62, 0.2, 1);
+    sprite.position.set(0, 1.34, 0);
+    sprite.renderOrder = 4;
+    return sprite;
+  }
+
   function makeToken(char) {
     const group = new THREE.Group();
 
@@ -386,7 +536,13 @@ export function createScene(container) {
     group.add(manaFill);
 
     world.add(group);
-    return { group, panel, base, hpBack, hpFill, manaBack, manaFill, panelMat };
+    const tok = {
+      group, panel, base, hpBack, hpFill, manaBack, manaFill, panelMat,
+      star: char.star || 1, model: null, mixer: null, badge: null,
+    };
+    // Si el personaje tiene un .glb subido, sustituye al cartel al llegar
+    attachModel(tok, char);
+    return tok;
   }
 
   /**
@@ -409,6 +565,7 @@ export function createScene(container) {
         tok.star = u.char.star;
         tok.panelMat.map = getCharTexture(u.char);
         tok.panelMat.needsUpdate = true;
+        if (tok.badge) tok.badge.material.map = starTexture(tok.star);
       }
       const { x, z } = cellToWorld(u.col, u.row);
       tok.group.position.set(x, 0, z);
@@ -421,6 +578,17 @@ export function createScene(container) {
 
       // El panel siempre mira a la camara para que se lea bien el personaje
       tok.panel.quaternion.copy(camera.quaternion);
+
+      // Cada bando mira hacia el contrario (la fila 0 es la mitad enemiga)
+      tok.facing = u.row >= rows / 2 ? Math.PI : 0;
+      if (tok.model) {
+        tok.model.rotation.y = tok.facing;
+        if (tok.fade !== op) {
+          tok.fade = op;
+          setModelOpacity(tok.model, op);
+        }
+      }
+      if (tok.badge) tok.badge.material.opacity = op;
 
       if (u.showHp) {
         tok.hpBack.visible = true;
@@ -458,11 +626,25 @@ export function createScene(container) {
     }
     for (const [uid, tok] of tokens) {
       if (!seen.has(uid)) {
+        releaseModel(tok);
         world.remove(tok.group);
         disposeTree(tok.group);
         tokens.delete(uid);
       }
     }
+  }
+
+  // Desvanecido de un modelo (al morir la ficha). Cada ficha parsea su propio
+  // .glb, asi que sus materiales son suyos y se pueden tocar sin efectos
+  // secundarios en las demas.
+  function setModelOpacity(modelo, op) {
+    modelo.traverse((o) => {
+      if (!o.material) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        m.transparent = op < 1;
+        m.opacity = op;
+      }
+    });
   }
 
   // ---------------- Resaltado de casillas ----------------
@@ -616,11 +798,16 @@ export function createScene(container) {
 
   let running = true;
   const clock = new THREE.Clock();
+  const mixerClock = new THREE.Clock(); // aparte: getDelta() consume el tiempo
   function animate() {
     if (!running) return;
     requestAnimationFrame(animate);
     const now = performance.now();
     const t = clock.getElapsedTime();
+
+    // animaciones de los modelos 3D que las traigan
+    const dt = mixerClock.getDelta();
+    if (mixers.size) for (const m of mixers) m.update(dt);
 
     // oleaje suave del mar
     const arr = oceanGeo.attributes.position.array;
@@ -643,6 +830,7 @@ export function createScene(container) {
 
   function dispose() {
     running = false;
+    mixers.clear();
     renderer.dispose();
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
@@ -657,6 +845,7 @@ export function createScene(container) {
     addFloatingText, addAttackBeam, addAbilityBurst, resize, dispose,
     get cols() { return cols; },
     get rows() { return rows; },
+    get tokens() { return tokens; }, // solo para pruebas automatizadas
   };
 }
 

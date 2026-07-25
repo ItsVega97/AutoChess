@@ -110,13 +110,23 @@ URL, bloqueadas por CORS en algunas redes) y de derechos dudosos.
 
 ## Fichas 3D
 
-Ahora mismo cada ficha es una **peana 3D con un cartel vertical** que muestra el
+Por defecto cada ficha es una **peana 3D con un cartel vertical** que muestra el
 retrato del personaje, al estilo de una figura de mesa. Funciona sin descargar
 nada y se ve bien en móvil.
 
-Para sustituirlas por **modelos 3D reales**, el formato que necesita el juego es
-**`.glb`** (glTF binario), a poder ser de bajo poligonaje (unos pocos miles de
-triángulos) y en pose neutra. Dónde conseguirlos:
+Para sustituir la de un personaje por un **modelo 3D real**, deja su archivo en
+`public/models/<tripulación>/<id>.glb` (por ejemplo `public/models/strawhat/luffy.glb`)
+— hay una carpeta por tripulación con la tabla de nombres exactos en su README.
+No hay que tocar código: el servidor publica en `/api/models` los modelos que
+encuentra y el juego carga solo esos, dejando la ficha con el retrato para los
+personajes que aún no lo tengan. Cada modelo se reescala a la altura de la
+casilla, se centra, se orienta hacia el bando contrario y conserva encima sus
+estrellas y sus barras de vida y maná. Si trae animaciones se reproduce la
+primera en bucle.
+
+El formato que necesita el juego es **`.glb`** (glTF binario), a poder ser de
+bajo poligonaje (unos pocos miles de triángulos) y en pose neutra. Dónde
+conseguirlos:
 
 | Sitio | Qué ofrece |
 |---|---|
@@ -126,8 +136,8 @@ triángulos) y en pose neutra. Dónde conseguirlos:
 | [Kenney](https://kenney.nl/assets) | Packs low-poly gratuitos (props y escenario, no personajes con licencia) |
 | [TurboSquid](https://www.turbosquid.com) / [CGTrader](https://www.cgtrader.com) | De pago, mayor calidad |
 
-Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
-`GLTFLoader` de Three.js sustituyendo la peana actual en `scene3d.js`.
+Consulta [`public/models/README.md`](public/models/README.md) para la lista
+completa de nombres de archivo por tripulación.
 
 ## Arquitectura
 
@@ -147,7 +157,9 @@ Cuando tengas los `.glb`, déjalos en `public/models/` y se pueden cargar con
   (`setInsets`), así la interfaz superpuesta nunca tapa el tablero.
 - `public/js/game.js` — sockets, interfaz 2D (tienda, banquillo, HUD) y la
   traducción entre las coordenadas del servidor y las de la escena.
-- `public/vendor/` — Three.js incluido en el repo (ver el README de esa carpeta).
+- `public/vendor/` — Three.js y `GLTFLoader` incluidos en el repo (ver el README
+  de esa carpeta).
+- `public/models/` — modelos 3D de los personajes, una carpeta por tripulación.
 
 ## Herramientas de comprobación
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -25,6 +26,27 @@ app.get('/api/units', (req, res) => {
     board: { cols: BOARD_COLS, rows: BOARD_ROWS, rowsPerPlayer: BOARD_ROWS / 2 },
   });
 });
+
+// Modelos 3D disponibles. El cliente pregunta una sola vez que personajes
+// tienen .glb subido, asi no va pidiendo 40 archivos que casi nunca existen.
+// Se recalcula cada 30s: basta con dejar el archivo en su carpeta.
+const MODELS_DIR = path.join(__dirname, '..', 'public', 'models');
+let modelsCache = { at: 0, ids: [] };
+function listModels() {
+  if (Date.now() - modelsCache.at < 30000) return modelsCache.ids;
+  const ids = [];
+  try {
+    for (const crew of fs.readdirSync(MODELS_DIR, { withFileTypes: true })) {
+      if (!crew.isDirectory()) continue;
+      for (const f of fs.readdirSync(path.join(MODELS_DIR, crew.name))) {
+        if (f.toLowerCase().endsWith('.glb')) ids.push(`${crew.name}/${f.slice(0, -4)}`);
+      }
+    }
+  } catch (e) { /* sin carpeta de modelos: se juega con las fichas planas */ }
+  modelsCache = { at: Date.now(), ids };
+  return ids;
+}
+app.get('/api/models', (req, res) => res.json({ models: listModels() }));
 
 const rooms = new Map(); // roomId -> GameRoom
 const socketRoom = new Map(); // socketId -> roomId
