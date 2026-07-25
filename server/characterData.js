@@ -300,6 +300,46 @@ const CREWS = {
   },
 };
 
+/**
+ * Traduce el objeto de bonificaciones de un nivel de tripulacion a texto.
+ * Se genera a partir de los propios numeros en vez de escribirlo a mano para
+ * que la interfaz nunca mienta si se reequilibran los valores.
+ */
+function describeBonus(b) {
+  const partes = [];
+  const pct = (m) => `${Math.round((m - 1) * 100)}%`;
+  if (b.allMult) partes.push(`+${pct(b.allMult)} a todas las estadísticas`);
+  if (b.atkMult) partes.push(`+${pct(b.atkMult)} ataque`);
+  if (b.defMult) partes.push(`+${pct(b.defMult)} defensa`);
+  if (b.hpMult) partes.push(`+${pct(b.hpMult)} vida`);
+  if (b.speedMult) partes.push(`+${pct(b.speedMult)} velocidad de ataque`);
+  if (b.shieldPct) partes.push(`escudo del ${Math.round(b.shieldPct * 100)}% de la vida`);
+  if (b.regenPct) partes.push(`regenera ${Math.round(b.regenPct * 100)}% de vida por segundo`);
+  if (b.dodgeChance) partes.push(`${Math.round(b.dodgeChance * 100)}% de esquivar`);
+  if (b.burnPct) partes.push(`los ataques queman (${Math.round(b.burnPct * 100)}% de vida por segundo)`);
+  if (b.chainChance) partes.push(`${Math.round(b.chainChance * 100)}% de encadenar a otro enemigo`);
+  if (b.stunChance) partes.push(`${Math.round(b.stunChance * 100)}% de aturdir al encadenar`);
+  if (b.healOnKillPct) partes.push(`cura ${Math.round(b.healOnKillPct * 100)}% al derrotar`);
+  return partes.join(', ');
+}
+
+// Anade a cada tripulacion la lista de niveles ya explicada y sus miembros,
+// para que el cliente pueda enseniar que consigues si la completas.
+for (const [slug, crew] of Object.entries(CREWS)) {
+  crew.tiers = Object.entries(crew.thresholds)
+    .map(([n, bonus]) => ({ n: Number(n), text: describeBonus(bonus) }))
+    .sort((a, b) => a.n - b.n);
+  crew.members = RAW.filter((c) => c.crew === slug)
+    .sort((a, b) => a.cost - b.cost)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      cost: c.cost,
+      captain: !!c.captain,
+      ability: c.ability ? { name: c.ability.name, desc: c.ability.desc, mana: c.ability.mana } : null,
+    }));
+}
+
 const STAR_MULT = { 1: 1, 2: 1.8, 3: 3.24, 4: 5.832 };
 const MAX_STAR = 4;
 

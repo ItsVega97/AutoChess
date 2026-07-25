@@ -269,21 +269,25 @@ export function createScene(container) {
   const shadowMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.28 });
   shadowGeo.rotateX(-Math.PI / 2);
 
+  // La textura incluye las estrellas, asi que la cache va por personaje Y nivel
   function getCharTexture(char) {
-    const cached = textureCache.get(char.id);
+    const key = `${char.id}|${char.star || 0}`;
+    const cached = textureCache.get(key);
     if (cached) return cached;
     const tex = new THREE.CanvasTexture(drawCharCanvas(char, portraitImages.get(char.id)));
     tex.colorSpace = THREE.SRGBColorSpace;
-    textureCache.set(char.id, tex);
+    textureCache.set(key, tex);
 
-    // Si tiene retrato, lo cargamos y regeneramos la textura al llegar
+    // Si tiene retrato, lo cargamos y regeneramos las texturas al llegar
     if (char.portrait && !portraitImages.has(char.id)) {
       const img = new Image();
       img.onload = () => {
         portraitImages.set(char.id, img);
-        const t = textureCache.get(char.id);
-        if (t) {
-          t.image = drawCharCanvas(char, img);
+        // hay una textura por nivel de estrella: hay que refrescarlas todas
+        for (const [k, t] of textureCache) {
+          if (!k.startsWith(`${char.id}|`)) continue;
+          const star = Number(k.split('|')[1]) || 0;
+          t.image = drawCharCanvas({ ...char, star }, img);
           t.needsUpdate = true;
         }
       };
@@ -375,7 +379,13 @@ export function createScene(container) {
       let tok = tokens.get(u.uid);
       if (!tok) {
         tok = makeToken(u.char);
+        tok.star = u.char.star;
         tokens.set(u.uid, tok);
+      } else if (tok.star !== u.char.star) {
+        // subio de estrella conservando el uid: hay que rehacer el cartel
+        tok.star = u.char.star;
+        tok.panelMat.map = getCharTexture(u.char);
+        tok.panelMat.needsUpdate = true;
       }
       const { x, z } = cellToWorld(u.col, u.row);
       tok.group.position.set(x, 0, z);
@@ -475,24 +485,34 @@ export function createScene(container) {
 
   // ---------------- Textos flotantes (dano, curacion...) ----------------
   const floats = [];
-  function addFloatingText(col, row, text, color) {
+  function addFloatingText(col, row, text, color, wide) {
+    // Los nombres de habilidad son largos: el lienzo se ensancha y la fuente se
+    // encoge hasta que el texto cabe entero (antes se cortaba a media palabra).
     const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 128;
+    canvas.width = wide ? 512 : 256;
+    canvas.height = 128;
     const c = canvas.getContext('2d');
-    c.font = 'bold 68px sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.lineWidth = 10;
+    let size = wide ? 56 : 68;
+    const maxW = canvas.width - 24;
+    c.font = `bold ${size}px sans-serif`;
+    while (c.measureText(text).width > maxW && size > 16) {
+      size -= 3;
+      c.font = `bold ${size}px sans-serif`;
+    }
+    c.lineWidth = Math.max(5, size * 0.15);
     c.strokeStyle = 'rgba(0,0,0,0.85)';
-    c.strokeText(text, 128, 64);
+    c.strokeText(text, canvas.width / 2, 64);
     c.fillStyle = color;
-    c.fillText(text, 128, 64);
+    c.fillText(text, canvas.width / 2, 64);
+
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     const { x, z } = cellToWorld(col, row);
     sprite.position.set(x, 1.85, z);
-    sprite.scale.set(1.1, 0.55, 1);
+    sprite.scale.set(wide ? 2.2 : 1.1, 0.55, 1);
     world.add(sprite);
     floats.push({ sprite, born: performance.now(), tex });
   }
@@ -665,6 +685,26 @@ function drawCharCanvas(char, portraitImg) {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillText('👑', 128, 40);
+  }
+
+  // Estrellas del personaje, en una banda oscura sobre el retrato: hay que
+  // poder ver de un vistazo el nivel de cada ficha tambien durante el combate.
+  const star = char.star || 0;
+  if (star > 0) {
+    const sw = 30 * star + 14;
+    const sx = 128 - sw / 2;
+    c.fillStyle = 'rgba(20,16,10,0.82)';
+    roundRect(c, sx, 208, sw, 38, 10);
+    c.fill();
+    c.strokeStyle = '#ffd23f';
+    c.lineWidth = 2.5;
+    roundRect(c, sx, 208, sw, 38, 10);
+    c.stroke();
+    c.fillStyle = '#ffd23f';
+    c.font = '900 26px sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('★'.repeat(star), 128, 228);
   }
 
   // Banda inferior con el nombre

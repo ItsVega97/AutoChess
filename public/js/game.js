@@ -22,11 +22,36 @@ import { createScene } from './scene3d.js';
   let battleStartTs = 0;
   const TICK_MS = 150;
 
+  // ---------------- Alto real de la pantalla ----------------
+  // En moviles 100vh cuenta tambien la franja que tapa la barra del navegador,
+  // asi que la pagina acaba siendo mas alta que lo visible y toca hacer scroll.
+  // window.innerHeight si da el alto realmente visible: lo publicamos como
+  // variable CSS y lo refrescamos cuando cambia (girar el movil, barra que
+  // aparece o desaparece...).
+  function syncAppHeight() {
+    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
+    if (scene) scene.resize();
+    if (!tooltipHidden()) placeInfoPanel();
+  }
+  function tooltipHidden() {
+    const t = document.getElementById('tooltip');
+    return !t || t.classList.contains('hidden');
+  }
+  syncAppHeight();
+  window.addEventListener('resize', syncAppHeight);
+  window.addEventListener('orientationchange', () => setTimeout(syncAppHeight, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight);
+
   // ---------------- Utilidades UI ----------------
   function show(id) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
-    if (id === 'screen-game' && scene) setTimeout(() => scene.resize(), 30);
+    document.body.classList.toggle('in-game', id === 'screen-game');
+    if (id === 'screen-game') {
+      syncAppHeight();
+      if (scene) setTimeout(() => scene.resize(), 30);
+    }
   }
 
   function el(tag, cls, html) {
@@ -298,9 +323,8 @@ import { createScene } from './scene3d.js';
         if (!affordable) return;
         socket.emit('buyUnit', { slot: idx });
       });
-      card.addEventListener('mouseenter', (e) => showTooltip(e, p));
-      card.addEventListener('mousemove', (e) => moveTooltip(e));
-      card.addEventListener('mouseleave', hideTooltip);
+      // Sin tooltip en la tienda a proposito: al aparecer tapaba las cartas de
+      // al lado y estorbaba justo cuando estas eligiendo que comprar.
       wrap.appendChild(card);
     });
   }
@@ -322,9 +346,6 @@ import { createScene } from './scene3d.js';
       card.dataset.uid = unit.uid;
       if (selectedUnit && selectedUnit.uid === unit.uid) card.classList.add('selected');
       card.addEventListener('click', () => toggleSelect(unit.uid, 'bench'));
-      card.addEventListener('mouseenter', (e) => showTooltip(e, p, unit.star));
-      card.addEventListener('mousemove', (e) => moveTooltip(e));
-      card.addEventListener('mouseleave', hideTooltip);
       wrap.appendChild(card);
     });
   }
@@ -342,15 +363,27 @@ import { createScene } from './scene3d.js';
       const tierLabel = s.tier === 5 ? ' · ¡TRIPULACIÓN COMPLETA!' : s.tier ? ` · nivel ${s.tier === 4 ? 'II' : 'I'}` : '';
       info.appendChild(el('div', 'syn-count', `${s.count}/5${tierLabel}`));
       row.appendChild(info);
-      row.title = s.desc;
+      // Tocar la tripulacion enseña que consigues si la completas
+      row.addEventListener('click', () => {
+        const yaAbierta = row.classList.contains('open');
+        setSelected(null);
+        if (yaAbierta) { hideTooltip(); return; }
+        document.querySelectorAll('.syn-row').forEach((r) => r.classList.remove('open'));
+        row.classList.add('open');
+        showInfo(crewInfoHtml(s.type, s.count));
+      });
       wrap.appendChild(row);
     }
   }
 
-  // ---------------- Tooltip ----------------
+  // ---------------- Panel de informacion ----------------
+  // Un unico panel que se ancla sobre el tablero (zona vacia) en vez de seguir
+  // al cursor: asi funciona igual con raton y con el dedo, y nunca tapa la
+  // tienda ni el banquillo mientras juegas.
   const tooltip = document.getElementById('tooltip');
-  function showTooltip(e, p, star) {
-    tooltip.innerHTML = `<h4>${p.captain ? '👑 ' : ''}${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
+
+  function unitInfoHtml(p, star) {
+    return `<h4>${p.captain ? '👑 ' : ''}${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
       <div class="row"><span>Tripulación</span><span>${crewDb[p.crew]?.icon || ''} ${crewDb[p.crew]?.label || p.crew}</span></div>
       <div class="row"><span>Coste</span><span>${p.cost} 🪙</span></div>
       <div class="row"><span>Vida</span><span>${p.hp}</span></div>
@@ -361,26 +394,55 @@ import { createScene } from './scene3d.js';
         <div class="tt-ability-name">⚡ ${p.ability.name} <span class="tt-mana">${p.ability.mana} maná</span></div>
         <div class="tt-ability-desc">${p.ability.desc}</div>
       </div>` : ''}`;
+  }
+
+  // Lo que consigues llevando esta tripulacion: niveles y habilidades
+  function crewInfoHtml(slug, count) {
+    const crew = crewDb[slug];
+    if (!crew) return '';
+    const tiers = (crew.tiers || []).map((t) => {
+      const alcanzado = count >= t.n;
+      return `<div class="tt-tier${alcanzado ? ' reached' : ''}">
+        <b>${t.n}</b> <span>${t.text}</span>
+      </div>`;
+    }).join('');
+    const miembros = (crew.members || []).map((m) => `
+      <div class="tt-member">
+        <div class="tt-member-name">${m.captain ? '👑 ' : ''}${m.name} <span class="tt-cost">${m.cost}🪙</span></div>
+        ${m.ability ? `<div class="tt-member-ability">⚡ ${m.ability.name} — ${m.ability.desc}</div>` : ''}
+      </div>`).join('');
+    return `<h4>${crew.icon} ${crew.label} <span class="tt-count">${count}/5</span></h4>
+      <div class="tt-tiers">${tiers}</div>
+      <div class="tt-members-title">Habilidades de la tripulación</div>
+      <div class="tt-members">${miembros}</div>`;
+  }
+
+  function showInfo(html) {
+    tooltip.innerHTML = html;
     tooltip.classList.remove('hidden');
-    moveTooltip(e);
+    placeInfoPanel();
   }
-  // Coloca el tooltip junto al cursor pero sin salirse de la pantalla: si no
-  // cabe debajo o a la derecha, lo pasa al otro lado.
-  function moveTooltip(e) {
-    tooltip.style.left = '0px';
-    tooltip.style.top = '0px';
+
+  // Lo colocamos sobre el tablero 3D, que es donde sobra sitio
+  function placeInfoPanel() {
+    const board = document.querySelector('.board-wrap');
+    if (!board) return;
+    const b = board.getBoundingClientRect();
     const r = tooltip.getBoundingClientRect();
-    const pad = 12;
-    let x = e.clientX + 16;
-    let y = e.clientY + 16;
-    if (x + r.width + pad > window.innerWidth) x = e.clientX - r.width - 16;
-    if (y + r.height + pad > window.innerHeight) y = e.clientY - r.height - 16;
-    tooltip.style.left = `${Math.max(pad, x)}px`;
-    tooltip.style.top = `${Math.max(pad, y)}px`;
+    const pad = 8;
+    const x = Math.max(pad, Math.min(b.left + pad, window.innerWidth - r.width - pad));
+    const y = Math.max(pad, Math.min(b.top + pad, window.innerHeight - r.height - pad));
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
   }
+
   function hideTooltip() {
     tooltip.classList.add('hidden');
+    document.querySelectorAll('.syn-row').forEach((r) => r.classList.remove('open'));
   }
+
+  // Tocar el propio panel lo cierra (en movil es lo que uno espera)
+  tooltip.addEventListener('click', hideTooltip);
 
   // ---------------- Seleccionar y colocar ----------------
   // En 3D el arrastre no aporta nada (y va mal en movil): se juega tocando la
@@ -393,11 +455,27 @@ import { createScene } from './scene3d.js';
     else setSelected({ uid, origin });
   }
 
+  function findMyUnit(uid) {
+    if (!myState) return null;
+    return myState.you.bench.find((u) => u && u.uid === uid)
+        || myState.you.board.find((u) => u.uid === uid) || null;
+  }
+
   function setSelected(sel) {
     selectedUnit = sel;
     document.querySelectorAll('.bench-unit').forEach((elm) => {
       elm.classList.toggle('selected', !!selectedUnit && elm.dataset.uid === selectedUnit.uid);
     });
+    document.querySelectorAll('.syn-row').forEach((r) => r.classList.remove('open'));
+    // Al seleccionar una ficha (del banquillo o del tablero) mostramos su info
+    if (selectedUnit) {
+      const unit = findMyUnit(selectedUnit.uid);
+      const ch = unit && charDb[unit.pokemonId];
+      if (ch) showInfo(unitInfoHtml(ch, unit.star));
+      else hideTooltip();
+    } else {
+      hideTooltip();
+    }
     refreshBoard();
   }
 
@@ -536,7 +614,7 @@ import { createScene } from './scene3d.js';
         if (u && scene) {
           const p = battleToRender(u.x, u.y);
           scene.addAbilityBurst(p.col, p.row);
-          scene.addFloatingText(p.col, p.row, e.name, '#ffd23f');
+          scene.addFloatingText(p.col, p.row, e.name, '#ffd23f', true);
         }
         break;
       }
