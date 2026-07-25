@@ -129,7 +129,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
           rowsPerPlayer = data.board.rowsPerPlayer;
           if (scene) scene.setBoard(boardCols, boardRows);
         }
-        renderComboPreview();
+        renderWiki();
         if (myState) { renderShop(myState.you); renderBench(myState.you); refreshBoard(); }
       })
       .catch((err) => {
@@ -139,14 +139,8 @@ import { getThumb, getThumbSync } from './thumbs.js';
   }
   loadCharDb();
 
-  function renderComboPreview() {
-    const wrap = document.getElementById('combo-icons');
-    wrap.innerHTML = '';
-    for (const [crew, def] of Object.entries(crewDb)) {
-      wrap.appendChild(el('div', 'ci', `${def.icon} ${def.label}`));
-    }
-    renderWiki();
-  }
+  document.getElementById('btn-wiki').addEventListener('click', () => show('screen-wiki'));
+  document.getElementById('btn-wiki-back').addEventListener('click', () => show('screen-menu'));
 
   // ---------------- Wiki Pirata (pantalla de inicio) ----------------
   // Una fila por tripulacion; al abrirla se ven sus niveles de combo y la ficha

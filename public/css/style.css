@@ -61,15 +61,17 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .btn:disabled { filter: grayscale(0.6); opacity: .6; cursor: not-allowed; }
 
 /* ---------- Menu ---------- */
-#screen-loading.active { display: flex; align-items: center; justify-content: center; padding: 24px; }
-/* El menu es una columna: tarjeta de juego arriba y Wiki Pirata debajo, con
-   scroll normal de pagina (dentro de la partida el scroll si esta bloqueado). */
-#screen-menu.active {
+#screen-menu.active, #screen-loading.active {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 22px;
-  padding: 24px 16px 40px;
+  justify-content: center;
+  padding: 24px 16px;
+}
+/* La Wiki es su propia pantalla y si necesita scroll */
+#screen-wiki.active {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 40px;
 }
 .menu-card {
   background: rgba(12, 30, 58, .78);
@@ -110,11 +112,6 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .spinner-big { width: 40px; height: 40px; border-width: 5px; }
 .loading-text { font-weight: 700; font-size: 16px; margin: 0; }
 .loading-opponent { opacity: .8; font-size: 14px; margin: 0; }
-
-.combos-preview { margin-top: 24px; border-top: 1px solid rgba(255,255,255,.15); padding-top: 16px; }
-.combos-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .7; margin-bottom: 10px; }
-.combo-icons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.combo-icons .ci { background: var(--panel-light); border-radius: 10px; padding: 6px 9px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
 
 /* ---------- Pantalla de partida ----------
    La escena 3D es el fondo a pantalla completa y la interfaz va superpuesta,
@@ -508,7 +505,11 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 
 /* ---------- Wiki Pirata (pantalla de inicio) ---------- */
 .wiki { width: 100%; max-width: 560px; }
-.wiki-title { font-size: 20px; margin: 0 0 4px; text-align: center; }
+.wiki-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.wiki-head .btn { margin: 0; flex: 0 0 auto; }
+.wiki-title { font-size: 20px; margin: 0; flex: 1 1 auto; text-align: center; }
+/* el boton de volver descuadra el centrado: compensamos con un hueco */
+.wiki-head::after { content: ''; flex: 0 0 74px; }
 .wiki-sub { font-size: 12px; opacity: .75; text-align: center; margin: 0 0 14px; }
 .wiki-crews { display: flex; flex-direction: column; gap: 8px; }
 

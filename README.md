@@ -40,6 +40,33 @@ Cuando el número de vivos es impar, uno **descansa** esa ronda por turnos. Vas
 cayendo hasta que solo queda uno: al morir se te dice tu puesto (4º, 3º, 2º) y
 arriba a la derecha tienes el marcador con la vida de los cuatro.
 
+## Cómo cambiar el nombre (y la URL) de la web
+
+El nombre visible ya es **Nakama Royale** (pestaña del navegador, logo,
+`package.json`). Lo único que sigue diciendo `pokechess-royale` es el **nombre
+del servicio en Render**, que es de donde sale la URL
+`https://pokechess-royale.onrender.com`:
+
+1. En [dashboard.render.com](https://dashboard.render.com) entra en el servicio →
+   **Settings** → **Name** → cámbialo a `nakama-royale` → **Save**.
+   La URL pasa a ser `https://nakama-royale.onrender.com` **al instante**, y la
+   antigua deja de funcionar (avisa a quien tenga el enlace guardado).
+2. Después cambia también la línea `name:` de `render.yaml` para que coincida:
+
+   ```yaml
+   services:
+     - type: web
+       name: nakama-royale
+   ```
+
+   Si cambias el `render.yaml` **sin** haber renombrado antes en el panel, Render
+   ve un servicio nuevo y te crea un segundo despliegue en vez de renombrar el
+   que ya tienes.
+
+Con un dominio propio (`nakamaroyale.com`, por ejemplo) es **Settings → Custom
+Domains** en Render y un registro CNAME en tu proveedor de dominio; el
+certificado HTTPS lo pone Render solo.
+
 ## Cómo desplegarlo para jugar online de verdad (con otra persona en internet)
 
 Este repo es un servidor Node.js + Socket.io autocontenido, sin base de datos.

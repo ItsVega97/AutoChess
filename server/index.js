@@ -231,5 +231,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`AutoChess Pokemon server escuchando en http://localhost:${PORT}`);
+  console.log(`Nakama Royale escuchando en http://localhost:${PORT}`);
 });
