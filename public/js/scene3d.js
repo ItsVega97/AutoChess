@@ -78,8 +78,11 @@ const H_ARTE_INV = invertirH(H_ARTE);
 
 export function createScene(container) {
   // ---------------- Fondo: la ilustracion ----------------
-  container.style.backgroundImage = `url('${ART.src}')`;
-  container.style.backgroundRepeat = 'no-repeat';
+  // La ilustracion, y detras un degradado cielo-mar que continua el dibujo
+  // por arriba y por abajo cuando sobra pantalla.
+  container.style.backgroundImage =
+    `url('${ART.src}'), linear-gradient(180deg, #4ea8ea 0%, #2f8fd8 42%, #1a5fa8 100%)`;
+  container.style.backgroundRepeat = 'no-repeat, no-repeat';
   container.style.backgroundColor = '#1c6fb4';
 
   const scene = new THREE.Scene();
@@ -117,31 +120,26 @@ export function createScene(container) {
   const mixers = new Set();
 
   // ---------------- Encaje de la ilustracion ----------------
-  // El dibujo se escala para que su rejilla ocupe lo mas posible de la franja
-  // libre entre el HUD y la barra de abajo, sin dejar de cubrir el lienzo.
+  // Se ve el dibujo ENTERO: se mete dentro del lienzo sin recortar nada
+  // (contain), y se coloca centrado en la franja libre entre el HUD y la barra
+  // de abajo, sin salirse de la pantalla. Lo que sobra a los lados o arriba y
+  // abajo lo tapa el degradado de cielo y mar del fondo.
   function calcularEncaje() {
     const libreAlto = Math.max(80, alto - insetTop - insetBottom);
-    const rejillaW = Math.max(ART.tr[0], ART.br[0]) - Math.min(ART.tl[0], ART.bl[0]);
-    const rejillaH = Math.max(ART.br[1], ART.bl[1]) - Math.min(ART.tl[1], ART.tr[1]);
+    const escala = Math.min(ancho / ART.w, alto / ART.h);
+    const dibujoW = ART.w * escala;
+    const dibujoH = ART.h * escala;
 
-    const cubrir = Math.max(ancho / ART.w, alto / ART.h);
-    const encajar = Math.min((ancho * 0.99) / rejillaW, (libreAlto * 0.95) / rejillaH);
-    const escala = Math.max(cubrir, encajar);
-
-    const centro = [
-      (ART.tl[0] + ART.tr[0] + ART.br[0] + ART.bl[0]) / 4,
-      (ART.tl[1] + ART.tr[1] + ART.br[1] + ART.bl[1]) / 4,
-    ];
-    let ox = ancho / 2 - centro[0] * escala;
-    let oy = insetTop + libreAlto / 2 - centro[1] * escala;
-
-    // sin huecos: el dibujo tiene que seguir tapando todo el lienzo
-    ox = Math.min(0, Math.max(ancho - ART.w * escala, ox));
-    oy = Math.min(0, Math.max(alto - ART.h * escala, oy));
+    const centroRejillaY = (ART.tl[1] + ART.tr[1] + ART.br[1] + ART.bl[1]) / 4;
+    let ox = (ancho - dibujoW) / 2;
+    // centramos la rejilla en la franja libre y luego lo metemos en pantalla
+    let oy = insetTop + libreAlto / 2 - centroRejillaY * escala;
+    oy = Math.max(Math.min(oy, alto - dibujoH), 0);
+    if (dibujoH > alto) oy = 0;
 
     fit = { escala, ox, oy };
-    container.style.backgroundSize = `${Math.round(ART.w * escala)}px ${Math.round(ART.h * escala)}px`;
-    container.style.backgroundPosition = `${Math.round(ox)}px ${Math.round(oy)}px`;
+    container.style.backgroundSize = `${Math.round(dibujoW)}px ${Math.round(dibujoH)}px, 100% 100%`;
+    container.style.backgroundPosition = `${Math.round(ox)}px ${Math.round(oy)}px, 0 0`;
   }
 
   // Punto del dibujo -> pixel de pantalla

@@ -266,8 +266,10 @@ completa de nombres de archivo por tripulación.
   cubierta de fondo y dibuja encima las fichas y los efectos con Three.js. La
   correspondencia entre casilla del juego y casilla dibujada es una homografía
   sacada de las cuatro esquinas de la rejilla del dibujo, así que cada ficha cae
-  clavada en su sitio con la perspectiva de la ilustración. El dibujo se encaja
-  en el hueco libre entre el HUD y la barra inferior (`setInsets`).
+  clavada en su sitio con la perspectiva de la ilustración. El dibujo se ve
+  **entero** (se mete dentro de la pantalla sin recortar) y se centra en el
+  hueco libre entre el HUD y la barra inferior (`setInsets`); detrás va un
+  degradado de cielo y mar para lo que sobre a los lados.
 - `public/img/scene/deck.png` — la ilustración. Si se cambia por otra hay que
   volver a medir las 4 esquinas de su rejilla en la constante `ART` de
   `scene3d.js`.
