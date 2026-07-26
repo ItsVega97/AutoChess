@@ -247,6 +247,30 @@ de su tripulación, así que no hace falta tenerlas las 40 para empezar. No se
 enlazan imágenes desde wikis externas: son poco fiables (se rompen al cambiar la
 URL, bloqueadas por CORS en algunas redes) y de derechos dudosos.
 
+## Pantalla de inicio
+
+Es la ilustración `public/img/menu/harbor.webp`: el título, el letrero del
+nombre y los cuatro botones **están pintados en ella**. Encima van los
+controles de verdad, colocados en píxeles del dibujo (1024x1536) dentro de
+`.menu-lienzo`, que `encajarMenu()` escala y centra en la pantalla:
+
+- Cada botón pintado tiene encima una zona tocable transparente (`.m-zona`)
+  que se ilumina al pulsar. El texto no se repite: el del dibujo es el bueno.
+- El letrero del nombre lleva encima un pergamino del mismo color que tapa el
+  «Vega» pintado, con el campo de texto real dentro.
+- El selector de modo viene con el 1v1 marcado en el dibujo, así que el estado
+  real se pinta encima: oscurecido el que no está elegido, aro dorado el
+  elegido.
+- Buscando partida y «empezar con bots» son carteles que se ponen encima de
+  «Jugar online» y «Jugar vs CPU».
+
+El encaje llena la pantalla, pero sin pasarse de lo que dejaría fuera el título
+o el último botón; lo que sobra a los lados se rellena con la propia imagen
+desenfocada. Comprobado de 360x520 a 1280x800.
+
+Si cambias el dibujo hay que volver a medir las cajas (están en el bloque
+«Menu» de `public/css/style.css`, en píxeles de la imagen).
+
 ## Marcos del banquillo y de la tienda
 
 La barra de abajo son dos ilustraciones, no CSS:

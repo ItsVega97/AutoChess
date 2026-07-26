@@ -60,8 +60,158 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .btn-small { padding: 9px 14px; font-size: 14px; width: auto; }
 .btn:disabled { filter: grayscale(0.6); opacity: .6; cursor: not-allowed; }
 
-/* ---------- Menu ---------- */
-#screen-menu.active, #screen-loading.active {
+/* ---------- Menu: la ilustracion del puerto ----------
+   El titulo, el letrero del nombre y los cuatro botones estan pintados en la
+   imagen. Encima van los controles de verdad, colocados en pixeles del dibujo
+   (1024x1536) dentro de .menu-lienzo, que game.js escala a la pantalla. */
+#screen-menu.active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  height: min(var(--app-height, 100svh), 100svh);
+  overflow: hidden;
+  padding: 0;
+}
+/* Lo que sobra de pantalla a los lados se rellena con la propia imagen
+   desenfocada, en vez de dejar franjas de color plano */
+#screen-menu.active::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  background: url('../img/menu/harbor.webp') no-repeat center / cover;
+  filter: blur(30px) brightness(.5) saturate(.8);
+}
+.menu-lienzo {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1024px;
+  height: 1536px;
+  transform-origin: 0 0;
+  background: url('../img/menu/harbor.webp') no-repeat 0 0 / 1024px 1536px;
+  box-shadow: 0 0 80px rgba(0,0,0,.55);
+}
+
+/* Zonas tocables encima de los botones pintados */
+.m-zona {
+  position: absolute;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-zona::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #fff;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.m-zona:hover::after { opacity: .13; }
+.m-zona:active::after { opacity: .24; }
+.m-zona:focus-visible { outline: 5px solid var(--gold); outline-offset: 4px; }
+.m-online { left: 201px; top: 891px; width: 616px; height: 102px; }
+.m-cpu    { left: 201px; top: 1046px; width: 616px; height: 104px; }
+.m-wiki   { left: 201px; top: 1201px; width: 616px; height: 104px; }
+.m-rank   { left: 201px; top: 1356px; width: 616px; height: 104px; }
+
+/* Selector de modo: el dibujo trae el 1v1 marcado, asi que el estado real se
+   pinta encima (oscurecido el que no esta elegido, aro dorado el elegido) */
+.m-modo1 { left: 206px; top: 762px; width: 298px; height: 81px; border-radius: 14px; }
+.m-modo2 { left: 516px; top: 762px; width: 297px; height: 81px; border-radius: 14px; }
+.mode-opt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(6,4,1,.6);
+  box-shadow: none;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.mode-opt.active::before {
+  background: rgba(255,210,63,.06);
+  box-shadow: inset 0 0 0 5px var(--gold), inset 0 0 28px rgba(255,210,63,.4);
+}
+
+/* Letrero del nombre: tapamos el "Vega" pintado con el mismo pergamino */
+.m-nombre {
+  position: absolute;
+  left: 214px; top: 635px;
+  width: 594px; height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 26px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f2d089 0%, #e9bf6d 45%, #d89f44 100%);
+  box-shadow: inset 0 3px 8px rgba(120,80,20,.3);
+}
+.m-calavera { font-size: 46px; line-height: 1; color: #241505; }
+.m-nombre input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-family: inherit;
+  font-size: 42px;
+  font-weight: 800;
+  color: #241505;
+}
+.m-nombre input::placeholder { color: rgba(60,35,5,.42); font-weight: 700; }
+
+/* Buscando partida: se pone encima del boton de jugar online */
+.m-cola {
+  position: absolute;
+  left: 201px; top: 891px; width: 616px; height: 102px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 18px;
+  border-radius: 20px;
+  background: #16110a;
+  box-shadow: inset 0 0 0 5px rgba(255,210,63,.7);
+  font-size: 30px;
+  font-weight: 800;
+}
+.m-cola span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-cola.hidden { display: none; }
+.m-cola .spinner { width: 44px; height: 44px; border-width: 7px; flex: 0 0 auto; }
+.m-cancelar {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, #c2453f, #7d1f1c);
+  box-shadow: inset 0 -5px 0 rgba(0,0,0,.3);
+  cursor: pointer;
+}
+/* Empezar con bots: encima del boton de CPU, que durante la cola no hace falta */
+.m-bots {
+  position: absolute;
+  left: 201px; top: 1046px; width: 616px; height: 104px;
+  border: 0;
+  border-radius: 20px;
+  font-family: inherit;
+  font-size: 38px;
+  font-weight: 900;
+  color: #fff;
+  background: rgba(9,44,24,.93);
+  box-shadow: inset 0 0 0 5px rgba(94,214,124,.8);
+  cursor: pointer;
+}
+.m-bots.hidden { display: none; }
+
+#screen-loading.active {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,21 +242,6 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 .logo span { color: var(--gold); }
 .subtitle { opacity: .85; margin: 0 0 22px; font-size: 14px; }
-#input-name {
-  width: 100%;
-  padding: 13px 14px;
-  border-radius: 12px;
-  border: none;
-  margin-bottom: 14px;
-  font-size: 16px;
-  background: #0f2545;
-  color: var(--text-light);
-  border: 2px solid #305283;
-}
-.queue-status { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 10px; font-size: 14px; }
-.queue-status.hidden { display: none; }
-#btn-fill-bots { margin-top: 10px; width: 100%; }
-#btn-fill-bots.hidden { display: none; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(255,255,255,.3); border-top-color: var(--gold); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -512,32 +647,6 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   .shop { height: clamp(88px, 24vw, 116px); }
 }
 
-
-/* ---------- Selector de modo (1v1 / 4 piratas) ---------- */
-.mode-picker {
-  display: flex;
-  gap: 6px;
-  background: rgba(8,20,40,.6);
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 12px;
-}
-.mode-opt {
-  flex: 1 1 0;
-  padding: 9px 6px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--text-light);
-  font-weight: 800;
-  font-size: 14px;
-  opacity: .6;
-}
-.mode-opt.active {
-  background: linear-gradient(180deg, #57b7ff, #1c7fd6);
-  opacity: 1;
-  box-shadow: inset 0 -3px 0 rgba(0,0,0,.25);
-}
 
 /* ---------- Marcador de la mesa (modo 4 piratas) ---------- */
 .hud-standings {

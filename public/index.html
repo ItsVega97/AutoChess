@@ -9,31 +9,31 @@
 </head>
 <body>
 
-<!-- ================= PANTALLA DE INICIO ================= -->
+<!-- ================= PANTALLA DE INICIO =================
+     Es la ilustracion del puerto: el titulo, el letrero y los botones estan
+     pintados en ella, y encima van los controles de verdad, colocados en
+     pixeles del dibujo (1024x1536). game.js escala el conjunto a la pantalla. -->
 <section id="screen-menu" class="screen active">
-  <div class="menu-card">
-    <h1 class="logo">Nakama<span> Royale</span></h1>
-    <p class="subtitle">Autobattler pirata online al estilo Tactics Royale</p>
-
-    <input id="input-name" maxlength="16" placeholder="Tu nombre de pirata" />
-
-    <div class="mode-picker">
-      <button class="mode-opt active" data-mode="1v1">⚔️ 1v1</button>
-      <button class="mode-opt" data-mode="4p">🏴‍☠️ 4 piratas</button>
+  <div class="menu-lienzo" id="menu-lienzo">
+    <div class="m-nombre">
+      <span class="m-calavera">☠</span>
+      <input id="input-name" maxlength="16" placeholder="Tu nombre" />
     </div>
 
-    <button id="btn-play-online" class="btn btn-primary">Jugar Online</button>
-    <button id="btn-play-ai" class="btn btn-secondary">🤖 Jugar vs CPU</button>
+    <button class="m-zona m-modo1 mode-opt active" data-mode="1v1" aria-label="Modo 1 contra 1"></button>
+    <button class="m-zona m-modo2 mode-opt" data-mode="4p" aria-label="Modo 4 piratas"></button>
 
-    <div id="queue-status" class="queue-status hidden">
+    <button id="btn-play-online" class="m-zona m-online" aria-label="Jugar online"></button>
+    <button id="btn-play-ai" class="m-zona m-cpu" aria-label="Jugar contra la CPU"></button>
+    <button id="btn-wiki" class="m-zona m-wiki" aria-label="Wiki Pirata"></button>
+    <button id="btn-rankings" class="m-zona m-rank" aria-label="Ránkings"></button>
+
+    <div id="queue-status" class="m-cola hidden">
       <div class="spinner"></div>
-      <span id="queue-text">Buscando rival online...</span>
-      <button id="btn-cancel-queue" class="btn btn-ghost btn-small">Cancelar</button>
+      <span id="queue-text">Buscando rival...</span>
+      <button id="btn-cancel-queue" class="m-cancelar">Cancelar</button>
     </div>
-    <button id="btn-fill-bots" class="btn btn-secondary btn-small hidden">▶️ Empezar con bots</button>
-
-    <button id="btn-wiki" class="btn btn-ghost">📖 Wiki Pirata</button>
-    <button id="btn-rankings" class="btn btn-ghost">🏆 Ránkings</button>
+    <button id="btn-fill-bots" class="m-bots hidden">▶️ Empezar con bots</button>
   </div>
 </section>
 

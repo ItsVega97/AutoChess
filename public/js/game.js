@@ -43,7 +43,41 @@ import { getThumb, getThumbSync } from './thumbs.js';
       scene.resize();
       syncSceneInsets();
     }
+    encajarMenu();
     if (!tooltipHidden()) placeInfoPanel();
+  }
+
+  // ---------------- Encaje de la pantalla de inicio ----------------
+  // El menu es la ilustracion del puerto con los controles puestos encima de
+  // los botones pintados, todo en pixeles del dibujo. Aqui solo se decide a
+  // que tamano y en que sitio se ve: se llena la pantalla, pero sin pasarse de
+  // lo que dejaria fuera el titulo o el ultimo boton.
+  const MENU_ARTE = {
+    w: 1024, h: 1536,      // tamano del dibujo
+    cx: 537, cy: 765,      // centro de lo que hay que ver (titulo + botones)
+    ancho: 725, alto: 1420, // y su tamano
+  };
+  function encajarMenu() {
+    const lienzo = document.getElementById('menu-lienzo');
+    if (!lienzo) return;
+    const w = window.innerWidth;
+    const medidas = [window.innerHeight, document.documentElement.clientHeight];
+    if (window.visualViewport) medidas.push(window.visualViewport.height);
+    const h = Math.min(...medidas.filter((n) => n > 0));
+
+    const escala = Math.min(
+      Math.max(w / MENU_ARTE.w, h / MENU_ARTE.h),
+      w / MENU_ARTE.ancho,
+      h / MENU_ARTE.alto,
+    );
+    const dw = MENU_ARTE.w * escala;
+    const dh = MENU_ARTE.h * escala;
+    let ox = w / 2 - MENU_ARTE.cx * escala;
+    let oy = h / 2 - MENU_ARTE.cy * escala;
+    // si el dibujo da de sobra, que no asome el fondo por los bordes
+    if (dw > w) ox = Math.min(0, Math.max(w - dw, ox));
+    if (dh > h) oy = Math.min(0, Math.max(h - dh, oy));
+    lienzo.style.transform = `translate(${Math.round(ox)}px, ${Math.round(oy)}px) scale(${escala})`;
   }
 
   // Le dice a la escena cuanto ocupan el HUD y la barra inferior para que
@@ -309,7 +343,8 @@ import { getThumb, getThumbSync } from './thumbs.js';
   const btnBots = document.getElementById('btn-fill-bots');
   socket.on('queued', ({ waiting, needed, mode } = {}) => {
     const t = document.getElementById('queue-text');
-    if (t && needed) t.textContent = `Buscando piratas... ${waiting}/${needed}`;
+    // texto corto: el cartel va encima del boton y no da para mas
+    if (t && needed) t.textContent = `Buscando... ${waiting}/${needed}`;
     // En 4 piratas, si ya sois dos o mas podeis empezar rellenando con bots
     if (btnBots) {
       const puede = mode === '4p' && waiting >= 2 && waiting < needed;
