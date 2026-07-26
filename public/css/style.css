@@ -348,12 +348,13 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .unit-avatar-img.uc-cara { background: #1a0f08; position: relative; }
 .unit-avatar-img.uc-cara img {
   position: absolute;
-  left: -52.5%;
-  top: -18%;
+  left: 50%;
+  top: 0;
   width: 205%;
   height: auto;
   object-fit: unset;
   border-radius: 0;
+  transform: translate(-50%, -10%);
 }
 
 /* Colores por tripulacion (combos) */
@@ -388,13 +389,17 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 /* Encuadre sobre la cara, dejando fuera el numero de coste impreso en el arte
    (que es decorativo y no coincide con el coste real del juego). */
+/* El desplazamiento va en % de la PROPIA imagen (por eso translate y no top):
+   asi el encuadre cae siempre a la misma altura de la carta, aunque unas
+   tandas vengan mas estrechas que otras. */
 .bench-unit.has-art .uc-art {
   position: absolute;
-  left: -52.5%;
-  top: -18%;
+  left: 50%;
+  top: 0;
   width: 205%;
   height: auto;
   object-fit: unset;
+  transform: translate(-50%, -10%);
 }
 .bench-unit .stars { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; line-height: 1.35; letter-spacing: -2px; color: var(--gold); background: linear-gradient(0deg, rgba(0,0,0,.75), rgba(0,0,0,0)); text-shadow: 0 1px 1px #000; pointer-events: none; }
 .bench-unit.selected { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,210,63,.6), 0 3px 6px rgba(0,0,0,.35); transform: translateY(-4px) scale(1.06); }
