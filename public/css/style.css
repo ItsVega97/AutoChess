@@ -105,6 +105,8 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 .queue-status { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 10px; font-size: 14px; }
 .queue-status.hidden { display: none; }
+#btn-fill-bots { margin-top: 10px; width: 100%; }
+#btn-fill-bots.hidden { display: none; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(255,255,255,.3); border-top-color: var(--gold); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

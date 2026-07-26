@@ -236,12 +236,14 @@ import { getThumb, getThumbSync } from './thumbs.js';
     searchingName = name;
     socket.emit('findMatch', { name, mode: modoElegido });
     document.getElementById('queue-status').classList.remove('hidden');
+    document.getElementById('btn-fill-bots').classList.add('hidden');
   });
 
   document.getElementById('btn-cancel-queue').addEventListener('click', () => {
     searchingOnline = false;
     socket.emit('cancelFindMatch');
     document.getElementById('queue-status').classList.add('hidden');
+    document.getElementById('btn-fill-bots').classList.add('hidden');
   });
 
   document.getElementById('btn-play-ai').addEventListener('click', () => {
@@ -254,10 +256,20 @@ import { getThumb, getThumbSync } from './thumbs.js';
     location.reload();
   });
 
-  socket.on('queued', ({ waiting, needed } = {}) => {
+  const btnBots = document.getElementById('btn-fill-bots');
+  socket.on('queued', ({ waiting, needed, mode } = {}) => {
     const t = document.getElementById('queue-text');
     if (t && needed) t.textContent = `Buscando piratas... ${waiting}/${needed}`;
+    // En 4 piratas, si ya sois dos o mas podeis empezar rellenando con bots
+    if (btnBots) {
+      const puede = mode === '4p' && waiting >= 2 && waiting < needed;
+      btnBots.classList.toggle('hidden', !puede);
+      if (puede) btnBots.textContent = `▶️ Empezar ${waiting} + ${needed - waiting} bots`;
+    }
   });
+  if (btnBots) {
+    btnBots.addEventListener('click', () => socket.emit('fillWithBots'));
+  }
 
   let sessionToken = null;
   let enteredGame = false;
@@ -317,17 +329,9 @@ import { getThumb, getThumbSync } from './thumbs.js';
     location.reload();
   });
 
-  socket.on('gameOver', ({ won, draw, place, total }) => {
-    const puesto = place && total > 2 ? ` · ${place}º de ${total}` : '';
-    document.getElementById('end-title').textContent =
-      (draw ? 'Empate' : won ? '¡Victoria!' : 'Derrota') + puesto;
-    document.getElementById('end-subtitle').textContent = draw
-      ? 'La partida ha terminado en tablas.'
-      : won
-      ? '¡Te has convertido en el Rey de los Piratas!'
-      : total > 2
-      ? `Tu tripulación ha caído en el puesto ${place}. ¡Vuelve a zarpar!`
-      : 'Tu tripulación ha caído. ¡Vuelve a zarpar!';
+  socket.on('gameOver', ({ won, draw }) => {
+    document.getElementById('end-title').textContent = draw ? 'Empate' : won ? 'Victoria' : 'Derrota';
+    document.getElementById('end-subtitle').textContent = '';
     show('screen-end');
   });
 
@@ -381,14 +385,6 @@ import { getThumb, getThumbSync } from './thumbs.js';
       scene.warmModels(aMano);
     }
 
-    const readyBtn = document.getElementById('btn-ready');
-    readyBtn.disabled = payload.phase !== 'prep' || payload.you.ready;
-    // Mantenemos el <span class="lbl"> porque en movil se oculta para dejar el
-    // boton solo con el icono y que quepa mas banquillo.
-    readyBtn.innerHTML = payload.you.ready
-      ? '⏳ <span class="lbl">Esperando</span>'
-      : '✅ <span class="lbl">Listo</span>';
-
     const banner = document.getElementById('battle-banner');
     if (payload.phase === 'result' && payload.lastRoundInfo) {
       const info = payload.lastRoundInfo;
@@ -424,8 +420,6 @@ import { getThumb, getThumbSync } from './thumbs.js';
   socket.on('tick', ({ timeLeft }) => {
     document.getElementById('hud-timer').textContent = Math.max(0, Math.ceil(timeLeft / 1000));
   });
-
-  document.getElementById('btn-ready').addEventListener('click', () => socket.emit('ready'));
 
   // ---------------- Avatares 2D (tienda / banquillo) ----------------
   function pintarRetrato(avatar, url) {

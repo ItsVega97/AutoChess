@@ -28,6 +28,8 @@ los dos botones:
 
 - **🤖 Jugar vs CPU**: empieza al instante, con 1 o 3 bots según el modo.
 - **Jugar Online**: te mete en la cola de ese modo (hacen falta 2 o 4 jugadores).
+  En **4 piratas**, si en la cola ya sois **dos o más**, aparece un botón para
+  empezar ya rellenando los huecos que falten con bots.
   Abre la misma URL en **otra pestaña, otro navegador o desde otro dispositivo en
   la misma red** (usando la IP de la máquina, ej. `http://192.168.1.x:3000`) y
   pulsa también "Jugar Online" para emparejar jugadores reales.
@@ -92,7 +94,8 @@ arranque `npm start` y puerto por `process.env.PORT`).
 
 1. **Fase de preparación (30s)**: compra personajes en la tienda, tócalos para
    seleccionarlos y luego toca una casilla de tu mitad de la cubierta para
-   colocarlos. Pulsa "Listo" cuando acabes (o espera a que se acabe el tiempo).
+   colocarlos. La ronda dura siempre esos 30 segundos: no hay botón de "listo",
+   así que nadie puede adelantarle el combate a los demás.
    La tienda enseña **4 personajes** y **se renueva entera cada vez que compras
    uno**: es la única forma de cambiar la oferta, no hay botón de reroll. Entre
    rondas **no cambia**, así que lo que no compraste sigue esperándote. Comprar

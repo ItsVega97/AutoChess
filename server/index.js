@@ -136,6 +136,20 @@ io.on('connection', (socket) => {
     }
   }));
 
+  // En la cola de 4 piratas: si ya hay dos o mas esperando, cualquiera de
+  // ellos puede arrancar la partida y se rellenan los huecos con bots.
+  socket.on('fillWithBots', safe(() => {
+    const cola = queues['4p'];
+    if (!cola.some((e) => e.socketId === socket.id)) return;
+    if (cola.length < 2) return;
+    const humanos = cola.splice(0, 4);
+    const jugadores = humanos.map((h) => ({ id: h.socketId, name: h.name }));
+    for (let i = jugadores.length; i < 4; i++) {
+      jugadores.push({ id: `bot-${socket.id}-${i}`, name: NOMBRES_BOT[i - 1], isBot: true });
+    }
+    createRoom(jugadores);
+  }));
+
   socket.on('cancelFindMatch', safe(() => {
     for (const q of Object.values(queues)) {
       const i = q.findIndex((e) => e.socketId === socket.id);
@@ -202,12 +216,6 @@ io.on('connection', (socket) => {
     const room = getRoom(socket.id);
     if (!room) return;
     room.moveToBench(room.sideOf(socket.id), uid);
-  }));
-
-  socket.on('ready', safe(() => {
-    const room = getRoom(socket.id);
-    if (!room) return;
-    room.setReady(room.sideOf(socket.id));
   }));
 
   socket.on('leaveRoom', safe(() => cleanup(socket.id)));

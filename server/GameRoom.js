@@ -36,7 +36,6 @@ function newPlayer(id, name, isBot) {
     bench: new Array(BENCH_SIZE).fill(null),
     board: [], // {uid,pokemonId,star,x,y}
     alive: true,
-    ready: false,
     connected: true,
   };
 }
@@ -180,7 +179,6 @@ class GameRoom {
       // La tienda NO se renueva entre rondas: lo que no compraste sigue ahi.
       // Solo cambia al comprar (o la primera vez, que hay que llenarla).
       if (this.round === 1) p.shop = rollShop();
-      p.ready = false;
       const streak = Math.max(p.winStreak, p.lossStreak);
       if (this.round > 1) p.gold += goldIncome(p.gold, streak);
     }
@@ -190,20 +188,15 @@ class GameRoom {
     }
     this.timer = setInterval(() => {
       this.timeLeft -= 1000;
-      if (this.timeLeft <= 0 || this.checkBothReady()) {
+      // La ronda dura siempre lo mismo: no hay boton de "listo" con el que un
+      // jugador pueda adelantar el combate a los demas.
+      if (this.timeLeft <= 0) {
         this.clearTimer();
         this.runBattlePhase();
       } else {
         this.broadcastTick();
       }
     }, 1000);
-  }
-
-  checkBothReady() {
-    return this.sides.every((s) => {
-      const p = this.players[s];
-      return p.ready || !p.alive;
-    });
   }
 
   runBotTurn(side) {
@@ -227,7 +220,6 @@ class GameRoom {
       if (!cell) break;
       this.moveToBoard(side, unit.uid, cell.x, cell.y, true);
     }
-    bot.ready = true;
   }
 
   findFreeCell(player) {
@@ -378,17 +370,6 @@ class GameRoom {
     }
   }
 
-  setReady(side) {
-    const p = this.players[side];
-    if (this.phase !== 'prep') return;
-    p.ready = true;
-    this.broadcastState();
-    if (this.checkBothReady()) {
-      this.clearTimer();
-      this.runBattlePhase();
-    }
-  }
-
   runBattlePhase() {
     this.phase = 'battle';
     this.lastFights = {};
@@ -525,7 +506,6 @@ class GameRoom {
       bench: p.bench,
       board: p.board,
       alive: p.alive,
-      ready: p.ready,
       synergies: computeSynergies(p.board).summary,
     };
   }
@@ -547,7 +527,6 @@ class GameRoom {
           hp: this.players[rival].hp,
           maxTeam: this.players[rival].maxTeam,
           alive: this.players[rival].alive,
-          ready: this.players[rival].ready,
         } : null,
         // Marcador de la sala (en 1v1 son dos, en 4 jugadores los cuatro)
         table: this.sides.map((s2) => ({
@@ -567,10 +546,7 @@ class GameRoom {
       const sock = this.io.sockets.sockets.get(this.players[side].id);
       if (!sock) continue;
       const rival = this.opponentOf(side);
-      sock.emit('tick', {
-        timeLeft: this.timeLeft,
-        opponentReady: rival ? this.players[rival].ready : false,
-      });
+      sock.emit('tick', { timeLeft: this.timeLeft });
     }
   }
 
