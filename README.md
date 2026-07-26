@@ -43,6 +43,12 @@ Cuando el número de vivos es impar, uno **descansa** esa ronda por turnos. Vas
 cayendo hasta que solo queda uno: al morir se te dice tu puesto (4º, 3º, 2º) y
 arriba a la derecha tienes el marcador con la vida de los cuatro.
 
+**Si alguien se va**, tiene 30 segundos para volver; pasados esos, se le trata
+como a cualquier otro eliminado y **la partida sigue** con el resto (solo sale
+un aviso arriba). Si le tocaba pelear contigo esa ronda, el combate se anula y
+tú descansas. La partida únicamente se acaba cuando ya no queda con quien
+pelear, y entonces por la vía normal: el que queda **gana**.
+
 ## Cómo cambiar el nombre (y la URL) de la web
 
 El nombre visible ya es **Nakama Royale** (pestaña del navegador, logo,

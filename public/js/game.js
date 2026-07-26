@@ -409,10 +409,23 @@ import { getThumb, getThumbSync } from './thumbs.js';
     nameEl.textContent = nameEl.textContent.replace(' (desconectado)', '');
   });
 
-  socket.on('opponentLeft', () => {
-    alert('Tu rival se ha desconectado y no ha vuelto. Vuelves al menú.');
-    location.reload();
+  // Alguien ha abandonado. La partida sigue: se le trata como a cualquier otro
+  // eliminado, asi que basta con avisar. Si era el ultimo rival, el servidor
+  // manda ademas el 'gameOver' de siempre.
+  socket.on('playerLeft', ({ name } = {}) => {
+    mostrarBanner(`${name || 'Un pirata'} ha abandonado la partida.`, 3500);
   });
+
+  // Aviso suelto arriba. Va en su propio cartel y no en el de la ronda, que lo
+  // reescribe cada vez que llega estado del servidor.
+  function mostrarBanner(texto, ms) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = texto;
+    toast.classList.remove('hidden');
+    clearTimeout(mostrarBanner.t);
+    mostrarBanner.t = setTimeout(() => toast.classList.add('hidden'), ms || 3000);
+  }
 
   socket.on('gameOver', ({ won, draw }) => {
     document.getElementById('end-title').textContent = draw ? 'Empate' : won ? 'Victoria' : 'Derrota';

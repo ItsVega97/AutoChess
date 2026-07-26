@@ -405,9 +405,11 @@ class GameRoom {
       }
     }
 
-    // Quien descansa esta ronda no pelea: se le avisa para que no espere
-    if (this.byeSide) {
-      const sock = this.io.sockets.sockets.get(this.players[this.byeSide].id);
+    // Quien no pelea esta ronda (le toca descansar, o su rival ha abandonado)
+    // tiene que enterarse, o se queda esperando un combate que no llega
+    for (const side of this.aliveSides()) {
+      if (this.pairs.some(([x, y]) => x === side || y === side)) continue;
+      const sock = this.io.sockets.sockets.get(this.players[side].id);
       if (sock) sock.emit('roundBye', { round: this.round });
     }
 
@@ -437,7 +439,11 @@ class GameRoom {
         this.roundInfo[y] = { result: 'draw', damage: 0, opponentName: px.name };
       }
     }
-    if (this.byeSide) this.roundInfo[this.byeSide] = { result: 'bye', damage: 0, opponentName: null };
+    // Descansan: el que le tocaba y el que se quedo sin rival por abandono
+    for (const side of this.aliveSides()) {
+      if (this.pairs.some(([x, y]) => x === side || y === side)) continue;
+      this.roundInfo[side] = { result: 'bye', damage: 0, opponentName: null };
+    }
 
     // Eliminados de esta ronda: el ultimo en caer queda por delante
     const caidos = [];
@@ -578,25 +584,43 @@ class GameRoom {
     }, RECONNECT_GRACE_MS);
   }
 
-  // Si no vuelve, se le da por eliminado y la partida sigue con el resto.
-  // Cuando queda un solo jugador (o ninguno) la sala se cierra.
+  // Si no vuelve, se le da por eliminado y la partida SIGUE con el resto: al
+  // que se va se le trata como a cualquier otro caido. Solo se acaba cuando ya
+  // no queda con quien pelear, y entonces por la via normal (endGame), para que
+  // el superviviente vea su victoria en vez de que le echen al menu.
   finalizeDisconnect(side) {
     if (this.ended) return;
     const p = this.players[side];
-    if (p.alive) {
+    const estabaVivo = p.alive;
+    if (estabaVivo) {
       p.alive = false;
       p.hp = 0;
       this.placements[side] = this.aliveSides().length + 1;
+      // si se va en mitad de su combate, ese combate deja de contar
+      this.pairs = this.pairs.filter(([x, y]) => x !== side && y !== side);
     }
-    const quedan = this.aliveSides().filter((s) => !this.players[s].isBot);
-    for (const s2 of this.sides) {
-      const sock = this.io.sockets.sockets.get(this.players[s2].id);
-      if (sock && s2 !== side && !this.players[s2].isBot) sock.emit('opponentLeft', { name: p.name });
+
+    // Aviso informativo al resto (los que ya estaban eliminados no cuentan como
+    // abandono: su marcha no cambia nada para los demas)
+    if (estabaVivo) {
+      for (const s2 of this.sides) {
+        if (s2 === side || this.players[s2].isBot) continue;
+        const sock = this.io.sockets.sockets.get(this.players[s2].id);
+        if (sock) sock.emit('playerLeft', { name: p.name });
+      }
     }
-    if (this.aliveSides().length <= 1 || quedan.length === 0) {
+
+    const humanosVivos = this.aliveSides().filter((s) => !this.players[s].isBot);
+    if (humanosVivos.length === 0) {
+      // no queda ninguna persona jugando: se cierra la sala sin mas
       this.clearTimer();
       this.ended = true;
       if (this.onEnded) this.onEnded();
+      return;
+    }
+    if (this.aliveSides().length <= 1) {
+      this.clearTimer();
+      this.endGame();
       return;
     }
     this.broadcastState();

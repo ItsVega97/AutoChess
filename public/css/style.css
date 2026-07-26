@@ -311,6 +311,24 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 .battle-banner.hidden { display: none; }
 
+/* Avisos sueltos (alguien abandona): van aparte del cartel de la ronda, que se
+   reescribe con cada estado que llega del servidor */
+.toast {
+  top: 92px; left: 50%;
+  transform: translateX(-50%);
+  max-width: 88%;
+  padding: 7px 14px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff2cf;
+  background: rgba(12,8,2,.9);
+  box-shadow: 0 4px 12px rgba(0,0,0,.5), inset 0 0 0 2px rgba(255,210,63,.5);
+  pointer-events: none;
+}
+.toast.hidden { display: none; }
+
 /* ---------- Tripulaciones: columna compacta a la izquierda ---------- */
 .synergies-panel {
   left: 6px;
