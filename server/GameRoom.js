@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
 const { teamSizeForRound, rollShop, goldIncome, roundDamage, sellPrice, SHOP_SIZE } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
+const { recordResult } = require('./rankings');
 
 const PREP_MS = 30000;
 const RESULT_MS = 6000;
@@ -473,6 +474,15 @@ class GameRoom {
     const vivos = this.aliveSides();
     const winnerSide = vivos.length === 1 ? vivos[0] : null;
     if (winnerSide) this.placements[winnerSide] = 1;
+
+    // Al ranking solo van las personas: los bots no cuentan
+    for (const side of this.sides) {
+      const p = this.players[side];
+      if (p.isBot || this.puntuado) continue;
+      recordResult(p.name, { won: side === winnerSide, place: this.placements[side] || null });
+    }
+    this.puntuado = true;
+
     for (const side of this.sides) {
       // A los eliminados ya se les aviso en su momento
       if (!this.players[side].alive && this.placements[side]) continue;

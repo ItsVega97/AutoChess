@@ -161,6 +161,26 @@ un miembro de Barbablanca, no dos.
 
 Roster: 40 personajes (5 por tripulación).
 
+## Banderas de las tripulaciones
+
+Los emojis de cada tripulación se pueden sustituir por su **Jolly Roger** real:
+deja el PNG en `public/img/crews/<tripulación>.png` (por ejemplo
+`public/img/crews/beast.png`). El servidor mira esa carpeta y manda la ruta en
+`/api/units`, así que no hay que tocar código; el que no tenga imagen sigue con
+su emoji. Los nombres exactos están en el README de esa carpeta.
+
+## Ránkings
+
+Botón en el menú → pantalla con las **partidas ganadas por cada pirata**, visible
+para todo el mundo. Se apunta al terminar cada partida (los bots no cuentan) y la
+identidad es el nombre con el que juegas: no hay cuentas, así que dos personas
+con el mismo nombre comparten fila.
+
+Se guarda en `data/rankings.json`, que **no va al repositorio**. Ojo con el plan
+gratuito de Render: el disco es efímero y el archivo se borra en cada despliegue
+o reinicio del servicio. Para que el ranking sobreviva hace falta un disco
+persistente (planes de pago) o una base de datos externa.
+
 ## Wiki Pirata
 
 La pantalla de inicio lleva debajo una **Wiki Pirata**: una fila por tripulación

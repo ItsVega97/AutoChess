@@ -139,8 +139,58 @@ import { getThumb, getThumbSync } from './thumbs.js';
   }
   loadCharDb();
 
+  // Icono de una tripulacion: su Jolly Roger si esta subido, y si no el emoji
+  function crewIcon(slug) {
+    const def = crewDb[slug];
+    if (!def) return '';
+    return def.flag
+      ? `<img class="crew-flag" src="${def.flag}" alt="" loading="lazy">`
+      : (def.icon || '');
+  }
+
   document.getElementById('btn-wiki').addEventListener('click', () => show('screen-wiki'));
   document.getElementById('btn-wiki-back').addEventListener('click', () => show('screen-menu'));
+  document.getElementById('btn-rankings').addEventListener('click', () => {
+    show('screen-rankings');
+    cargarRankings();
+  });
+  document.getElementById('btn-rankings-back').addEventListener('click', () => show('screen-menu'));
+
+  // ---------------- Ránkings ----------------
+  // Marcador publico de victorias. La identidad es el nombre de pirata, sin
+  // cuentas: se pide al servidor cada vez que se abre la pantalla.
+  function cargarRankings() {
+    const wrap = document.getElementById('rankings-list');
+    wrap.innerHTML = '<div class="rank-empty">Cargando...</div>';
+    fetch('api/rankings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const lista = (d && d.players) || [];
+        wrap.innerHTML = '';
+        if (!lista.length) {
+          wrap.appendChild(el('div', 'rank-empty',
+            'Todavía no hay partidas registradas. ¡Gana una y estrena la tabla!'));
+          return;
+        }
+        const yo = (nameInput.value || '').trim();
+        const medallas = { 1: '🥇', 2: '🥈', 3: '🥉' };
+        for (const j of lista) {
+          const fila = el('div', `rank-row${j.rank <= 3 ? ` top${j.rank}` : ''}${j.name === yo ? ' me' : ''}`);
+          fila.appendChild(el('div', 'rank-pos', medallas[j.rank] || `${j.rank}º`));
+          // textContent, que el nombre lo escribe el jugador
+          const nombre = el('div', 'rank-name');
+          nombre.textContent = j.name;
+          fila.appendChild(nombre);
+          fila.appendChild(el('div', 'rank-wins', `${j.wins} 🏆`));
+          fila.appendChild(el('div', 'rank-games', `${j.games} partida${j.games === 1 ? '' : 's'}`));
+          wrap.appendChild(fila);
+        }
+      })
+      .catch(() => {
+        wrap.innerHTML = '';
+        wrap.appendChild(el('div', 'rank-empty', 'No se pudo cargar el ranking.'));
+      });
+  }
 
   // ---------------- Wiki Pirata (pantalla de inicio) ----------------
   // Una fila por tripulacion; al abrirla se ven sus niveles de combo y la ficha
@@ -153,7 +203,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
       const bloque = el('div', 'wiki-crew');
 
       const cabecera = el('button', 'wiki-crew-head');
-      cabecera.innerHTML = `<span class="wc-icon">${def.icon}</span>
+      cabecera.innerHTML = `<span class="wc-icon">${crewIcon(slug)}</span>
         <span class="wc-name">${def.label}</span>
         <span class="wc-open">▾</span>`;
       bloque.appendChild(cabecera);
@@ -513,7 +563,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
     const sorted = [...list].sort((a, b) => b.count - a.count);
     for (const s of sorted) {
       const row = el('div', `syn-row${s.tier > 0 ? ' active' : ''}`);
-      row.appendChild(el('div', 'syn-icon', s.icon));
+      row.appendChild(el('div', 'syn-icon', crewIcon(s.type)));
       const info = el('div', 'syn-info');
       info.appendChild(el('div', '', `<b>${s.label}</b>`));
       const tierLabel = s.tier === 5 ? ' · ¡TRIPULACIÓN COMPLETA!' : s.tier ? ` · nivel ${s.tier === 4 ? 'II' : 'I'}` : '';
@@ -546,7 +596,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
 
   function unitInfoHtml(p, star) {
     return `<h4>${p.captain ? '👑 ' : ''}${p.name} ${star ? '⭐'.repeat(star) : ''}</h4>
-      <div class="row"><span>Tripulación</span><span>${crewDb[p.crew]?.icon || ''} ${crewDb[p.crew]?.label || p.crew}</span></div>
+      <div class="row"><span>Tripulación</span><span>${crewIcon(p.crew)} ${crewDb[p.crew]?.label || p.crew}</span></div>
       <div class="row"><span>Coste</span><span>${p.cost} 🪙</span></div>
       ${star ? `<div class="row"><span>Se vende por</span><span>${sellPrice(p.cost, star)} 🪙</span></div>` : ''}
       <div class="row"><span>Vida</span><span>${p.hp}</span></div>
@@ -574,7 +624,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         <div class="tt-member-name">${m.captain ? '👑 ' : ''}${m.name} <span class="tt-cost">${m.cost}🪙</span></div>
         ${m.ability ? `<div class="tt-member-ability">⚡ ${m.ability.name} — ${m.ability.desc}</div>` : ''}
       </div>`).join('');
-    return `<h4>${crew.icon} ${crew.label} <span class="tt-count">${count}/5</span></h4>
+    return `<h4>${crewIcon(slug)} ${crew.label} <span class="tt-count">${count}/5</span></h4>
       <div class="tt-tiers">${tiers}</div>
       <div class="tt-members-title">Habilidades de la tripulación</div>
       <div class="tt-members">${miembros}</div>`;

@@ -8,6 +8,7 @@ const { Server } = require('socket.io');
 const { CHARACTERS, CREWS } = require('./characterData');
 const { BOARD_COLS, BOARD_ROWS } = require('./battle');
 const GameRoom = require('./GameRoom');
+const rankings = require('./rankings');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,10 +20,32 @@ const io = new Server(server, {
 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// Banderas piratas (Jolly Roger) de cada tripulacion. Si el archivo esta en
+// public/img/crews/ se manda su ruta y el cliente la usa en vez del emoji.
+const CREWS_DIR = path.join(__dirname, '..', 'public', 'img', 'crews');
+let flagsCache = { at: 0, map: {} };
+function listCrewFlags() {
+  if (Date.now() - flagsCache.at < 30000) return flagsCache.map;
+  const map = {};
+  try {
+    for (const f of fs.readdirSync(CREWS_DIR)) {
+      const m = f.match(/^(.+)\.(png|webp|svg|jpg|jpeg)$/i);
+      if (m) map[m[1].toLowerCase()] = `img/crews/${f}`;
+    }
+  } catch (e) { /* sin carpeta: se siguen usando los emojis */ }
+  flagsCache = { at: Date.now(), map };
+  return map;
+}
+
 app.get('/api/units', (req, res) => {
+  const banderas = listCrewFlags();
+  const crews = {};
+  for (const [slug, def] of Object.entries(CREWS)) {
+    crews[slug] = banderas[slug] ? { ...def, flag: banderas[slug] } : def;
+  }
   res.json({
     characters: CHARACTERS,
-    crews: CREWS,
+    crews,
     board: { cols: BOARD_COLS, rows: BOARD_ROWS, rowsPerPlayer: BOARD_ROWS / 2 },
   });
 });
@@ -52,6 +75,10 @@ function listModels() {
   return map;
 }
 app.get('/api/models', (req, res) => res.json({ models: listModels() }));
+
+// Ranking publico: lo ve cualquiera, sin cuentas. La identidad es el nombre de
+// pirata con el que juegas.
+app.get('/api/rankings', (req, res) => res.json({ players: rankings.top(50) }));
 
 const rooms = new Map(); // roomId -> GameRoom
 const socketRoom = new Map(); // socketId -> roomId
