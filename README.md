@@ -131,6 +131,9 @@ arranque `npm start` y puerto por `process.env.PORT`).
    (⚔️ 3/4) dice cuántas llevas en cubierta y cuántas te caben; no es un nivel.
    Con el cupo lleno solo puedes cambiar una tropa por otra del banquillo.
    La partida acaba cuando uno de los dos llega a 0 de sus 12 puntos de vida.
+   Si sueltas una tropa **encima de otra que ya está en cubierta**, las dos se
+   **intercambian** de casilla; si la que sueltas viene del banquillo, la que
+   estaba baja al hueco que acaba de quedar libre.
 4. **Fusión**: consigue 2 copias iguales de un personaje (mismo nivel de estrella)
    y se fusionan automáticamente en la siguiente estrella, hasta un máximo de ⭐⭐⭐⭐.
 5. **Vender**: selecciona una ficha y toca la papelera (que te dice por cuánto

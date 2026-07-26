@@ -273,45 +273,45 @@ class GameRoom {
     }
   }
 
+  // Colocar una ficha en una casilla. Si la casilla esta ocupada:
+  //  - viniendo de la cubierta, las dos fichas se INTERCAMBIAN de sitio;
+  //  - viniendo del banquillo, el ocupante baja al hueco que deja la que sube.
+  // Se trabaja con las fichas, no con sus indices: al sacar una de la lista los
+  // indices de las demas se mueven, y con ellos se acababa cambiando de sitio
+  // (o directamente perdiendo) la ficha equivocada.
   moveToBoard(side, uid, x, y, skipEmit) {
     const p = this.players[side];
     if (this.phase !== 'prep' || !p.alive) return;
     x = Math.max(0, Math.min(BOARD_COLS - 1, x));
     y = Math.max(0, Math.min(BOARD_ROWS_PLAYER - 1, y));
-    const occupantIdx = p.board.findIndex((u) => u.x === x && u.y === y);
+
     const benchIdx = p.bench.findIndex((u) => u && u.uid === uid);
-    const boardIdx = p.board.findIndex((u) => u.uid === uid);
+    const enCubierta = p.board.find((u) => u.uid === uid) || null;
+    if (benchIdx === -1 && !enCubierta) return;
 
-    let unit;
-    if (benchIdx !== -1) {
-      const cap = p.maxTeam;
-      if (occupantIdx === -1 && p.board.length >= cap) return;
-      unit = p.bench[benchIdx];
-      p.bench[benchIdx] = null;
-    } else if (boardIdx !== -1) {
-      unit = p.board[boardIdx];
-      p.board.splice(boardIdx, 1);
-    } else {
-      return;
-    }
+    const ocupante = p.board.find((u) => u.x === x && u.y === y && u.uid !== uid) || null;
 
-    if (occupantIdx !== -1) {
-      const occupant = p.board[occupantIdx];
-      p.board.splice(occupantIdx, 1);
-      if (benchIdx !== -1) {
-        const freeBench = p.bench.findIndex((s) => s === null);
-        if (freeBench !== -1) p.bench[freeBench] = occupant;
-      } else {
-        occupant.x = 0;
-        occupant.y = 0; // fallback, shouldn't normally hit
-        const freeBench2 = p.bench.findIndex((s) => s === null);
-        if (freeBench2 !== -1) p.bench[freeBench2] = occupant;
+    if (enCubierta) {
+      if (ocupante) {
+        ocupante.x = enCubierta.x;
+        ocupante.y = enCubierta.y;
       }
+      enCubierta.x = x;
+      enCubierta.y = y;
+    } else {
+      // Con el cupo lleno solo se puede cambiar por una de las que ya estan
+      if (!ocupante && p.board.length >= p.maxTeam) return;
+      const unit = p.bench[benchIdx];
+      p.bench[benchIdx] = null;
+      if (ocupante) {
+        p.board.splice(p.board.indexOf(ocupante), 1);
+        p.bench[benchIdx] = ocupante; // el hueco que acaba de quedar libre
+      }
+      unit.x = x;
+      unit.y = y;
+      p.board.push(unit);
     }
 
-    unit.x = x;
-    unit.y = y;
-    p.board.push(unit);
     this.runMerges(p);
     if (!skipEmit) this.broadcastState();
   }

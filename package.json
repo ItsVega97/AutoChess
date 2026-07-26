@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "test": "node test/abandono.test.js"
+    "test": "node test/mover.test.js && node test/abandono.test.js"
   },
   "license": "MIT",
   "dependencies": {
