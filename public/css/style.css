@@ -197,14 +197,16 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .syn-info { display: flex; flex-direction: column; line-height: 1.15; }
 .syn-count { font-size: 9px; opacity: .85; }
 
-/* ---------- Barra inferior: acciones, banquillo y tienda ---------- */
+/* ---------- Barra inferior: acciones, banquillo y tienda ----------
+   Los dos marcos son madera opaca con su propia sombra, asi que van
+   directamente sobre la ilustracion: sin panel ni degradado detras, pegados
+   entre si y al borde de abajo, como en la referencia. */
 .bottom-ui {
   bottom: 0; left: 0; right: 0;
-  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(0deg, rgba(4,12,28,.72), rgba(4,12,28,.45) 55%, rgba(4,12,28,0));
+  padding: 0 5px env(safe-area-inset-bottom, 0px);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0;
 }
 
 .bottom-ui > * { width: 100%; max-width: 720px; margin: 0 auto; }
@@ -219,9 +221,9 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   width: 100%;
   max-width: 470px;
   margin: 0 auto;
-  aspect-ratio: 2114 / 416;
+  aspect-ratio: 2123 / 423;
   background: url('../img/ui/bench.webp') no-repeat center / 100% 100%;
-  filter: drop-shadow(0 3px 8px rgba(0,0,0,.5));
+  filter: drop-shadow(0 4px 9px rgba(0,0,0,.55));
 }
 .bench-slot {
   position: absolute;
@@ -267,7 +269,7 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 .shop-inner {
   position: absolute;
-  inset: 11% 4.2% 11.5%;
+  inset: 10% 4.2% 12%;
   display: flex;
   align-items: center;
   justify-content: space-evenly;

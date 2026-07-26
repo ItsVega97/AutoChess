@@ -32,6 +32,10 @@ const ART = {
   tr: [817, 540],
   br: [884, 898],   // esquina exterior de la casilla de abajo a la derecha
   bl: [254, 898],
+  // color medio del borde de arriba y del de abajo del dibujo: con ellos se
+  // continua la imagen cuando sobra pantalla y no se ve la juntura
+  cielo: '#1c7ce4',
+  mar: '#032c5c',
 };
 
 // Colores de cada tripulacion (mismos tonos que la interfaz 2D)
@@ -78,12 +82,14 @@ const H_ARTE_INV = invertirH(H_ARTE);
 
 export function createScene(container) {
   // ---------------- Fondo: la ilustracion ----------------
-  // La ilustracion, y detras un degradado cielo-mar que continua el dibujo
-  // por arriba y por abajo cuando sobra pantalla.
+  // La ilustracion, y detras un degradado cielo-mar que continua el dibujo por
+  // arriba y por abajo cuando sobra pantalla. Los cortes del degradado se
+  // colocan justo en los bordes del dibujo (ver calcularEncaje) y con el color
+  // medio de esos bordes, para que no se note la juntura.
   container.style.backgroundImage =
-    `url('${ART.src}'), linear-gradient(180deg, #4ea8ea 0%, #2f8fd8 42%, #1a5fa8 100%)`;
+    `url('${ART.src}'), linear-gradient(180deg, ${ART.cielo} 0%, ${ART.mar} 100%)`;
   container.style.backgroundRepeat = 'no-repeat, no-repeat';
-  container.style.backgroundColor = '#1c6fb4';
+  container.style.backgroundColor = ART.mar;
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(0, 1, 1, 0, -20000, 20000);
@@ -124,6 +130,12 @@ export function createScene(container) {
   // (contain), y se coloca centrado en la franja libre entre el HUD y la barra
   // de abajo, sin salirse de la pantalla. Lo que sobra a los lados o arriba y
   // abajo lo tapa el degradado de cielo y mar del fondo.
+  // Cuando sobra sitio por abajo (en movil el dibujo lo limita el ancho) se
+  // baja para que el casco quede por detras del banquillo y la tienda, como
+  // en el mockup, en vez de flotar con un trozo de mar entre medias.
+  const SESGO_ABAJO = 0.55; // cuanto de esa holgura se aprovecha
+  const MARGEN_REJILLA = 6; // px que se dejan libres bajo la ultima fila
+
   function calcularEncaje() {
     const libreAlto = Math.max(80, alto - insetTop - insetBottom);
     const escala = Math.min(ancho / ART.w, alto / ART.h);
@@ -131,15 +143,26 @@ export function createScene(container) {
     const dibujoH = ART.h * escala;
 
     const centroRejillaY = (ART.tl[1] + ART.tr[1] + ART.br[1] + ART.bl[1]) / 4;
+    const rejillaAbajo = Math.max(ART.bl[1], ART.br[1]);
     let ox = (ancho - dibujoW) / 2;
     // centramos la rejilla en la franja libre y luego lo metemos en pantalla
     let oy = insetTop + libreAlto / 2 - centroRejillaY * escala;
+    // ...y la bajamos mientras la ultima fila siga viendose entera
+    const oyTope = alto - insetBottom - MARGEN_REJILLA - rejillaAbajo * escala;
+    if (oyTope > oy) oy += (oyTope - oy) * SESGO_ABAJO;
     oy = Math.max(Math.min(oy, alto - dibujoH), 0);
     if (dibujoH > alto) oy = 0;
 
     fit = { escala, ox, oy };
     container.style.backgroundSize = `${Math.round(dibujoW)}px ${Math.round(dibujoH)}px, 100% 100%`;
     container.style.backgroundPosition = `${Math.round(ox)}px ${Math.round(oy)}px, 0 0`;
+    // El degradado se queda plano hasta donde empieza el dibujo y desde donde
+    // acaba: asi el cielo de arriba y el mar de abajo enlazan sin escalon.
+    const arriba = Math.round(oy);
+    const abajo = Math.round(oy + dibujoH);
+    container.style.backgroundImage =
+      `url('${ART.src}'), linear-gradient(180deg, ${ART.cielo} 0px, ${ART.cielo} ${arriba}px, ` +
+      `${ART.mar} ${abajo}px, ${ART.mar} 100%)`;
   }
 
   // Punto del dibujo -> pixel de pantalla

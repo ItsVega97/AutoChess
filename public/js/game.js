@@ -585,10 +585,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
   // Huecos dibujados en el barril del banquillo (public/img/ui/bench.png),
   // medidos sobre la propia imagen y expresados en % del marco.
   const HUECOS_BANQUILLO = [
-    [19.96, 29.23], [32.02, 41.39], [44.09, 53.45],
-    [56.15, 65.66], [68.40, 77.86], [80.51, 89.83],
+    [20.02, 29.25], [32.03, 41.31], [44.09, 53.32],
+    [56.10, 65.47], [68.25, 77.63], [80.36, 89.54],
   ];
-  const HUECO_Y = [27.9, 79.9];
+  const HUECO_Y = [27.98, 79.25];
 
   function renderBench(you) {
     const wrap = document.getElementById('bench');

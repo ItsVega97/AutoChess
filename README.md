@@ -248,8 +248,16 @@ La barra de abajo son dos ilustraciones, no CSS:
 El barril hace también de **papelera**: al seleccionar una ficha aparece encima
 por cuánto se vende, y al tocarlo se vende.
 
-Los PNG originales (con su fondo negro sin recortar) están en `assets-src/ui/`,
-junto con la referencia de la tienda llena que se usó para calcular las medidas.
+Los dos marcos van **directamente sobre la ilustración**, sin panel ni degradado
+detrás y pegados al borde de abajo, y la cubierta se coloca lo más baja que
+puede (sin esconder la última fila) para que el casco del barco quede por
+detrás de ellos. Lo que sobra de pantalla por arriba y por abajo lo rellena un
+degradado que arranca con el color medio del borde del dibujo, así que no se
+ve la juntura.
+
+Los PNG originales (con transparencia, sin recortar el margen) están en
+`assets-src/ui/`, junto con la referencia de la tienda llena y el mockup de la
+pantalla completa que se usaron para calcular las medidas.
 
 ## Fichas 3D
 
