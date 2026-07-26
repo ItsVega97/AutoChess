@@ -6,8 +6,9 @@ tipo TFT: compras en tienda, banquillo, tablero, fusiones de unidades y combates
 automáticos por rondas contra otro jugador en tiempo real (o contra una IA para
 probarlo tú solo al instante).
 
-El combate se juega sobre la **cubierta 3D de un barco pirata** renderizada con
-Three.js, con un tablero compacto de 5x3 casillas por jugador y 12 puntos de vida
+El combate se juega sobre una **ilustración de la cubierta del Thousand Sunny**:
+el tablero son las casillas que ya vienen pintadas en el dibujo, y encima se
+colocan los personajes en 3D. Son 5x3 casillas por jugador y 12 puntos de vida
 cada uno — partidas rápidas, de unas 5-8 rondas.
 
 La escena 3D ocupa toda la pantalla y la interfaz va **superpuesta** encima
@@ -261,10 +262,15 @@ completa de nombres de archivo por tripulación.
   (preparación / combate / resultado), emparejamientos por ronda, tienda,
   banquillo, fusiones, IA del bot, reconexión y eliminación por puestos.
 - `server/index.js` — servidor Express + Socket.io, una cola por modo.
-- `public/js/scene3d.js` — toda la escena 3D (Three.js): barco, mar, casillas,
-  fichas, efectos de combate y selección de casilla por raycasting. La cámara
-  encuadra la cubierta en el hueco libre entre el HUD y la barra inferior
-  (`setInsets`), así la interfaz superpuesta nunca tapa el tablero.
+- `public/js/scene3d.js` — la escena de combate: pone la ilustración de la
+  cubierta de fondo y dibuja encima las fichas y los efectos con Three.js. La
+  correspondencia entre casilla del juego y casilla dibujada es una homografía
+  sacada de las cuatro esquinas de la rejilla del dibujo, así que cada ficha cae
+  clavada en su sitio con la perspectiva de la ilustración. El dibujo se encaja
+  en el hueco libre entre el HUD y la barra inferior (`setInsets`).
+- `public/img/scene/deck.png` — la ilustración. Si se cambia por otra hay que
+  volver a medir las 4 esquinas de su rejilla en la constante `ART` de
+  `scene3d.js`.
 - `public/js/game.js` — sockets, interfaz 2D (tienda, banquillo, HUD) y la
   traducción entre las coordenadas del servidor y las de la escena.
 - `public/vendor/` — Three.js y `GLTFLoader` incluidos en el repo (ver el README

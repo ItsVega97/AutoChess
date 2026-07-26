@@ -1,19 +1,38 @@
 'use strict';
 
 /**
- * Escenario 3D del combate: la cubierta de un barco pirata en alta mar.
+ * Escenario del combate: la cubierta del barco es la ILUSTRACION de fondo, y el
+ * tablero se calca sobre las casillas que ya vienen pintadas en ella.
  *
- * El resto del juego (game.js) le habla en "coordenadas de render": columna
- * 0..cols-1 y fila 0..rows-1, donde la fila 0 es la mitad enemiga (al fondo)
- * y la ultima fila es la tuya (cerca de la camara). Asi este modulo no
- * necesita saber de que lado juega cada uno.
+ * Como funciona:
+ *  - La imagen (public/img/scene/deck.png) va de fondo del contenedor con un
+ *    tamano y una posicion que calcula este modulo, no un `cover` a secas, para
+ *    saber exactamente donde cae cada pixel del dibujo.
+ *  - Encima va un lienzo WebGL transparente donde se dibujan las fichas y los
+ *    efectos, con camara ortografica en pixeles de pantalla.
+ *  - La correspondencia "casilla del juego -> punto del dibujo" es una
+ *    homografia sacada de las 4 esquinas de la rejilla pintada, medidas sobre
+ *    la imagen. Asi las fichas caen clavadas en su casilla, con la perspectiva
+ *    del dibujo, sin tener que adivinar con que camara se ilustro.
+ *
+ * game.js le sigue hablando en "coordenadas de render": columna 0..cols-1 y
+ * fila 0..rows-1, con la fila 0 al fondo (mitad enemiga).
  */
 
 import * as THREE from '../vendor/three.module.min.js';
 import { instantiateModel, preloadModels, warmModels, MODEL_HEIGHT } from './models.js';
 
-const TILE = 1.0;          // tamano de casilla en unidades del mundo
-const DECK_MARGIN = 1.15;  // cubierta extra alrededor del tablero
+// La ilustracion y las 4 esquinas de su rejilla 5x6, en pixeles de la imagen
+// original. Si se cambia el dibujo hay que volver a medirlas.
+const ART = {
+  src: 'img/scene/deck.png',
+  w: 1122,
+  h: 1402,
+  tl: [326, 540],   // esquina exterior de la casilla de arriba a la izquierda
+  tr: [817, 540],
+  br: [884, 898],   // esquina exterior de la casilla de abajo a la derecha
+  bl: [254, 898],
+};
 
 // Colores de cada tripulacion (mismos tonos que la interfaz 2D)
 const CREW_COLORS = {
@@ -27,287 +46,189 @@ const CREW_COLORS = {
   baroque: '#e8862f',
 };
 
+// ---------------- Homografia del cuadrado unidad a la rejilla dibujada ----------------
+function homografiaDesdeCuadrado(q) {
+  const [x0, y0] = q.tl, [x1, y1] = q.tr, [x2, y2] = q.br, [x3, y3] = q.bl;
+  const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+  const den = dx1 * dy2 - dx2 * dy1;
+  const g = (sx * dy2 - dx2 * sy) / den;
+  const h = (dx1 * sy - sx * dy1) / den;
+  return [
+    x1 - x0 + g * x1, x3 - x0 + h * x3, x0,
+    y1 - y0 + g * y1, y3 - y0 + h * y3, y0,
+    g, h, 1,
+  ];
+}
+function aplicarH(H, u, v) {
+  const w = H[6] * u + H[7] * v + H[8];
+  return [(H[0] * u + H[1] * v + H[2]) / w, (H[3] * u + H[4] * v + H[5]) / w];
+}
+function invertirH(H) {
+  const [a, b, c, d, e, f, g, h, i] = H;
+  return [
+    e * i - f * h, c * h - b * i, b * f - c * e,
+    f * g - d * i, a * i - c * g, c * d - a * f,
+    d * h - e * g, b * g - a * h, a * e - b * d,
+  ];
+}
+
+const H_ARTE = homografiaDesdeCuadrado(ART);
+const H_ARTE_INV = invertirH(H_ARTE);
+
 export function createScene(container) {
+  // ---------------- Fondo: la ilustracion ----------------
+  container.style.backgroundImage = `url('${ART.src}')`;
+  container.style.backgroundRepeat = 'no-repeat';
+  container.style.backgroundColor = '#1c6fb4';
+
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#7ec8f0');
-  scene.fog = new THREE.Fog('#7ec8f0', 34, 88);
+  const camera = new THREE.OrthographicCamera(0, 1, 1, 0, -20000, 20000);
 
-  const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 200);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setClearAlpha(0);
   container.appendChild(renderer.domElement);
+  renderer.domElement.style.position = 'absolute';
+  renderer.domElement.style.inset = '0';
 
-  // ---------------- Luces ----------------
-  scene.add(new THREE.HemisphereLight('#cfeaff', '#3b6b4a', 1.05));
-  const sun = new THREE.DirectionalLight('#fff3d6', 1.25);
-  sun.position.set(6, 12, 5);
-  scene.add(sun);
+  // Luz parecida a la del dibujo: sol calido desde la izquierda
+  scene.add(new THREE.HemisphereLight('#e8f4ff', '#6b5334', 1.3));
+  const sol = new THREE.DirectionalLight('#fff2d0', 1.5);
+  sol.position.set(-0.4, 1, 0.7);
+  scene.add(sol);
+  const relleno = new THREE.DirectionalLight('#bcd8ff', 0.45);
+  relleno.position.set(0.6, 0.4, -0.8);
+  scene.add(relleno);
 
-  // ---------------- Mar ----------------
-  const oceanGeo = new THREE.PlaneGeometry(120, 120, 24, 24);
-  oceanGeo.rotateX(-Math.PI / 2);
-  const oceanMat = new THREE.MeshStandardMaterial({ color: '#1d6fb8', roughness: 0.55, metalness: 0.1 });
-  const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-  ocean.position.y = -1.4;
-  scene.add(ocean);
-  const oceanBase = Float32Array.from(oceanGeo.attributes.position.array);
-
-  // Grupo que contiene barco + tablero, centrado en el origen
   const world = new THREE.Group();
   scene.add(world);
 
   let cols = 5;
   let rows = 6;
-  const tiles = [];
-  let tileGroup = null;
-  let shipGroup = null;
-
-  // Convierte coordenadas de render (col,row) a posicion en el mundo
-  function cellToWorld(col, row) {
-    return {
-      x: (col - (cols - 1) / 2) * TILE,
-      z: (row - (rows - 1) / 2) * TILE,
-    };
-  }
-
-  // ---------------- Construccion del barco ----------------
-  function buildShip() {
-    if (shipGroup) {
-      world.remove(shipGroup);
-      disposeTree(shipGroup);
-    }
-    shipGroup = new THREE.Group();
-
-    const deckW = cols * TILE + DECK_MARGIN * 2;
-    const deckD = rows * TILE + DECK_MARGIN * 2;
-
-    // Casco: caja ancha que se estrecha hacia abajo (con la proa apuntando al fondo)
-    const hullMat = new THREE.MeshStandardMaterial({ color: '#6b3f22', roughness: 0.85 });
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(deckW, 1.5, deckD), hullMat);
-    hull.position.y = -0.85;
-    shipGroup.add(hull);
-
-    const hullBottom = new THREE.Mesh(new THREE.BoxGeometry(deckW * 0.72, 0.9, deckD * 0.78), hullMat);
-    hullBottom.position.y = -1.75;
-    shipGroup.add(hullBottom);
-
-    // Proa (triangulo al fondo) para que se lea como un barco
-    const bowShape = new THREE.Shape();
-    bowShape.moveTo(-deckW / 2, 0);
-    bowShape.lineTo(deckW / 2, 0);
-    bowShape.lineTo(0, -2.2);
-    bowShape.lineTo(-deckW / 2, 0);
-    const bowGeo = new THREE.ExtrudeGeometry(bowShape, { depth: 1.5, bevelEnabled: false });
-    bowGeo.rotateX(Math.PI / 2);
-    const bow = new THREE.Mesh(bowGeo, hullMat);
-    bow.position.set(0, -0.1, -deckD / 2);
-    shipGroup.add(bow);
-
-    // Cubierta de tablones: franjas alternas de madera
-    const plankLight = new THREE.MeshStandardMaterial({ color: '#c99a5b', roughness: 0.9 });
-    const plankDark = new THREE.MeshStandardMaterial({ color: '#b9873f', roughness: 0.9 });
-    const plankCount = Math.round(deckD / 0.55);
-    const plankD = deckD / plankCount;
-    for (let i = 0; i < plankCount; i++) {
-      const plank = new THREE.Mesh(
-        new THREE.BoxGeometry(deckW, 0.18, plankD * 0.94),
-        i % 2 === 0 ? plankLight : plankDark
-      );
-      plank.position.set(0, -0.09, -deckD / 2 + plankD * (i + 0.5));
-      shipGroup.add(plank);
-    }
-
-    // Barandilla perimetral
-    const railMat = new THREE.MeshStandardMaterial({ color: '#8b5a2b', roughness: 0.8 });
-    const postGeo = new THREE.CylinderGeometry(0.07, 0.08, 0.55, 6);
-    const addRail = (x1, z1, x2, z2) => {
-      const len = Math.hypot(x2 - x1, z2 - z1);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.09), railMat);
-      bar.position.set((x1 + x2) / 2, 0.42, (z1 + z2) / 2);
-      bar.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
-      shipGroup.add(bar);
-      const posts = Math.max(2, Math.round(len / 0.9));
-      for (let i = 0; i <= posts; i++) {
-        const t = i / posts;
-        const post = new THREE.Mesh(postGeo, railMat);
-        post.position.set(x1 + (x2 - x1) * t, 0.18, z1 + (z2 - z1) * t);
-        shipGroup.add(post);
-      }
-    };
-    const hw = deckW / 2 - 0.12;
-    const hd = deckD / 2 - 0.12;
-    addRail(-hw, -hd, -hw, hd);
-    addRail(hw, -hd, hw, hd);
-    addRail(-hw, hd, hw, hd); // popa (detras del jugador)
-
-    // Mastil con vela y bandera pirata, plantado detras de la proa
-    const mastMat = new THREE.MeshStandardMaterial({ color: '#7a4a24', roughness: 0.8 });
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.19, 5.2, 8), mastMat);
-    mast.position.set(0, 2.5, -hd - 1.0);
-    shipGroup.add(mast);
-
-    const yard = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.12, 0.12), mastMat);
-    yard.position.set(0, 3.85, -hd - 1.0);
-    shipGroup.add(yard);
-
-    const sailMat = new THREE.MeshStandardMaterial({
-      color: '#f4ead6', roughness: 1, side: THREE.DoubleSide,
-    });
-    const sail = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.4, 6, 4), sailMat);
-    // ondula ligeramente la vela para que no parezca un cartel plano
-    const sp = sail.geometry.attributes.position;
-    for (let i = 0; i < sp.count; i++) {
-      sp.setZ(i, Math.sin(sp.getX(i) * 1.5) * 0.18);
-    }
-    sp.needsUpdate = true;
-    sail.geometry.computeVertexNormals();
-    sail.position.set(0, 2.6, -hd - 0.95);
-    shipGroup.add(sail);
-
-    const flag = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.0, 0.66),
-      new THREE.MeshStandardMaterial({ map: makeJollyRogerTexture(), side: THREE.DoubleSide, roughness: 1 })
-    );
-    flag.position.set(0.5, 4.75, -hd - 1.0);
-    shipGroup.add(flag);
-
-    // Props: barriles y cajas en las esquinas de la cubierta
-    const barrelMat = new THREE.MeshStandardMaterial({ color: '#8a5a2e', roughness: 0.85 });
-    const crateMat = new THREE.MeshStandardMaterial({ color: '#a9793c', roughness: 0.9 });
-    const props = [
-      [-hw + 0.55, hd - 0.6, 'barrel'],
-      [hw - 0.55, hd - 0.6, 'crate'],
-      [-hw + 0.5, -hd + 0.7, 'crate'],
-      [hw - 0.5, -hd + 0.7, 'barrel'],
-    ];
-    for (const [px, pz, kind] of props) {
-      let m;
-      if (kind === 'barrel') {
-        m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.28, 0.68, 10), barrelMat);
-        m.position.set(px, 0.34, pz);
-      } else {
-        m = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.55, 0.62), crateMat);
-        m.position.set(px, 0.27, pz);
-        m.rotation.y = Math.random() * 0.6;
-      }
-      shipGroup.add(m);
-    }
-
-    world.add(shipGroup);
-  }
-
-  // ---------------- Casillas del tablero ----------------
-  function buildTiles() {
-    if (tileGroup) {
-      world.remove(tileGroup);
-      disposeTree(tileGroup);
-    }
-    tiles.length = 0;
-    tileGroup = new THREE.Group();
-    const geo = new THREE.BoxGeometry(TILE * 0.9, 0.06, TILE * 0.9);
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const mine = row >= rows / 2;
-        const mat = new THREE.MeshStandardMaterial({
-          color: mine ? '#3f8f5a' : '#a04747',
-          transparent: true,
-          opacity: 0.5,
-          roughness: 0.7,
-        });
-        const tile = new THREE.Mesh(geo, mat);
-        const { x, z } = cellToWorld(col, row);
-        tile.position.set(x, 0.04, z);
-        tile.userData = { col, row, mine, baseColor: mine ? '#3f8f5a' : '#a04747' };
-        tileGroup.add(tile);
-        tiles.push(tile);
-      }
-    }
-    world.add(tileGroup);
-  }
-
-  // ---------------- Camara ----------------
-  // Franjas de pantalla tapadas por la interfaz superpuesta (HUD arriba,
-  // tienda abajo). El tablero se encuadra en el hueco que queda libre.
+  let ancho = 1;
+  let alto = 1;
   let insetTop = 0;
   let insetBottom = 0;
-  function setInsets(top, bottom) {
-    insetTop = top || 0;
-    insetBottom = bottom || 0;
-    placeCamera();
+  let fit = { escala: 1, ox: 0, oy: 0 }; // como se coloca el dibujo en el lienzo
+
+  const tokens = new Map();
+  const mixers = new Set();
+
+  // ---------------- Encaje de la ilustracion ----------------
+  // El dibujo se escala para que su rejilla ocupe lo mas posible de la franja
+  // libre entre el HUD y la barra de abajo, sin dejar de cubrir el lienzo.
+  function calcularEncaje() {
+    const libreAlto = Math.max(80, alto - insetTop - insetBottom);
+    const rejillaW = Math.max(ART.tr[0], ART.br[0]) - Math.min(ART.tl[0], ART.bl[0]);
+    const rejillaH = Math.max(ART.br[1], ART.bl[1]) - Math.min(ART.tl[1], ART.tr[1]);
+
+    const cubrir = Math.max(ancho / ART.w, alto / ART.h);
+    const encajar = Math.min((ancho * 0.99) / rejillaW, (libreAlto * 0.95) / rejillaH);
+    const escala = Math.max(cubrir, encajar);
+
+    const centro = [
+      (ART.tl[0] + ART.tr[0] + ART.br[0] + ART.bl[0]) / 4,
+      (ART.tl[1] + ART.tr[1] + ART.br[1] + ART.bl[1]) / 4,
+    ];
+    let ox = ancho / 2 - centro[0] * escala;
+    let oy = insetTop + libreAlto / 2 - centro[1] * escala;
+
+    // sin huecos: el dibujo tiene que seguir tapando todo el lienzo
+    ox = Math.min(0, Math.max(ancho - ART.w * escala, ox));
+    oy = Math.min(0, Math.max(alto - ART.h * escala, oy));
+
+    fit = { escala, ox, oy };
+    container.style.backgroundSize = `${Math.round(ART.w * escala)}px ${Math.round(ART.h * escala)}px`;
+    container.style.backgroundPosition = `${Math.round(ox)}px ${Math.round(oy)}px`;
   }
 
-  // Vista en angulo desde detras de tu mitad, estilo Tactics Royale.
-  // La distancia se calcula para que el tablero llene el hueco visible tanto en
-  // moviles (altos y estrechos) como en escritorio (anchos y bajos).
-  function placeCamera() {
-    const boardW = cols * TILE;
-    const boardD = rows * TILE;
-    const fov = (camera.fov * Math.PI) / 180;
-    const w = renderer.domElement.clientWidth || 1;
-    const h = renderer.domElement.clientHeight || 1;
+  // Punto del dibujo -> pixel de pantalla
+  function arteAPantalla(p) {
+    return [p[0] * fit.escala + fit.ox, p[1] * fit.escala + fit.oy];
+  }
+  // Vertice de la rejilla (en fracciones de casilla) -> pixel de pantalla
+  function celdaAPantalla(col, row) {
+    return arteAPantalla(aplicarH(H_ARTE, col / cols, row / rows));
+  }
+  function centroCelda(col, row) {
+    return celdaAPantalla(col + 0.5, row + 0.5);
+  }
+  function anchoCelda(col, row) {
+    const a = celdaAPantalla(col, row + 0.5);
+    const b = celdaAPantalla(col + 1, row + 0.5);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+  // Pixel de pantalla -> casilla (null si cae fuera del tablero)
+  function pantallaACelda(px, py) {
+    const x = (px - fit.ox) / fit.escala;
+    const y = (py - fit.oy) / fit.escala;
+    const [u, v] = aplicarH(H_ARTE_INV, x, y);
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+    return {
+      col: Math.min(cols - 1, Math.max(0, Math.floor(u * cols))),
+      row: Math.min(rows - 1, Math.max(0, Math.floor(v * rows))),
+    };
+  }
+  // En Three la Y va hacia arriba; en pantalla hacia abajo
+  function aMundo(p) { return [p[0], alto - p[1]]; }
 
-    // Alto realmente disponible una vez descontada la interfaz
-    const freeH = Math.max(120, h - insetTop - insetBottom);
-    const freeAspect = w / freeH;
+  // ---------------- Resaltado de casillas ----------------
+  // Se pinta el poligono exacto de la casilla dibujada, con su perspectiva
+  const highlightGroup = new THREE.Group();
+  world.add(highlightGroup);
+  let ultimoHighlight = [];
 
-    const halfW = boardW / 2 + 1.4;          // margen lateral para el casco
-    const halfH = (boardD / 2 + 1.2) * 0.92; // el tablero se ve escorzado
-    const needed = Math.max(halfH, halfW / freeAspect);
-    // El encuadre se calcula sobre freeH pero se renderiza en h: hay que
-    // compensar para que el tablero conserve el tamano pensado.
-    const dist = (needed / Math.tan(fov / 2)) * (h / freeH);
-
-    const pitch = (44 * Math.PI) / 180;
-    camera.position.set(0, Math.sin(pitch) * dist, Math.cos(pitch) * dist + boardD * 0.12);
-    camera.lookAt(0, 1.1, -0.5);
-
-    // Desplaza el encuadre para centrarlo en el hueco libre en vez de en el
-    // centro del lienzo, asi la cubierta no queda debajo de la tienda.
-    const centroLibre = insetTop + freeH / 2;
-    const desplazamiento = centroLibre - h / 2;
-    camera.setViewOffset(w, h, 0, -desplazamiento, w, h);
-    camera.updateProjectionMatrix();
+  function setHighlights(cells) {
+    ultimoHighlight = cells || [];
+    pintarHighlights();
   }
 
-  function setBoard(nextCols, nextRows) {
-    cols = nextCols;
-    rows = nextRows;
-    buildShip();
-    buildTiles();
-    placeCamera();
+  function pintarHighlights() {
+    for (const hijo of [...highlightGroup.children]) {
+      highlightGroup.remove(hijo);
+      hijo.geometry.dispose();
+      hijo.material.dispose();
+    }
+    for (const c of ultimoHighlight) {
+      const p = [
+        celdaAPantalla(c.col, c.row),
+        celdaAPantalla(c.col + 1, c.row),
+        celdaAPantalla(c.col + 1, c.row + 1),
+        celdaAPantalla(c.col, c.row + 1),
+      ].map(aMundo);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([
+        p[0][0], p[0][1], 0, p[1][0], p[1][1], 0, p[2][0], p[2][1], 0,
+        p[0][0], p[0][1], 0, p[2][0], p[2][1], 0, p[3][0], p[3][1], 0,
+      ], 3));
+      // OJO con el side: al voltear la Y (pantalla -> mundo) se invierte el
+      // orden de los vertices y el poligono queda de espaldas a la camara.
+      const malla = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color: '#ffe57a', transparent: true, opacity: 0.5,
+        depthTest: false, side: THREE.DoubleSide,
+      }));
+      malla.renderOrder = -1;
+      highlightGroup.add(malla);
+    }
   }
 
-  // ---------------- Fichas (standees) ----------------
-  // Cada ficha es una peana 3D con un panel vertical que muestra el retrato
-  // del personaje (o su cartel de iniciales si aun no hay imagen).
-  const tokens = new Map(); // uid -> { group, panelMat, ... }
-  const textureCache = new Map(); // charId -> THREE.CanvasTexture
-  const portraitImages = new Map(); // charId -> HTMLImageElement
+  // ---------------- Fichas ----------------
+  const textureCache = new Map();
+  const portraitImages = new Map();
 
-  const baseGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.12, 16);
-  const ringGeo = new THREE.TorusGeometry(0.39, 0.05, 8, 20);
-  const panelGeo = new THREE.PlaneGeometry(0.92, 1.15);
-  const shadowGeo = new THREE.CircleGeometry(0.38, 16);
-  const shadowMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.28 });
-  shadowGeo.rotateX(-Math.PI / 2);
-
-  // La textura incluye las estrellas, asi que la cache va por personaje Y nivel
   function getCharTexture(char) {
     const key = `${char.id}|${char.star || 0}`;
     const cached = textureCache.get(key);
     if (cached) return cached;
-    const tex = new THREE.CanvasTexture(drawCharCanvas(char, portraitImages.get(char.id)));
-    tex.colorSpace = THREE.SRGBColorSpace;
+    const tex = aTextura(drawCharCanvas(char, portraitImages.get(char.id)));
     textureCache.set(key, tex);
 
-    // Si tiene retrato, lo cargamos y regeneramos las texturas al llegar
     if (char.portrait && !portraitImages.has(char.id)) {
       const img = new Image();
       img.onload = () => {
         portraitImages.set(char.id, img);
-        // hay una textura por nivel de estrella: hay que refrescarlas todas
         for (const [k, t] of textureCache) {
           if (!k.startsWith(`${char.id}|`)) continue;
           const star = Number(k.split('|')[1]) || 0;
@@ -315,22 +236,13 @@ export function createScene(container) {
           t.needsUpdate = true;
         }
       };
-      img.onerror = () => portraitImages.set(char.id, null); // se queda el cartel de iniciales
       img.src = `/img/characters/${char.portrait}`;
-      portraitImages.set(char.id, undefined); // marca "cargando"
     }
     return tex;
   }
 
-  // ---------------- Modelos 3D opcionales ----------------
-  // Si existe public/models/<tripulacion>/<id>.glb se usa en lugar del cartel.
-  // La descarga y el parseo viven en models.js, compartidos con los retratos
-  // de las tarjetas y la Wiki Pirata.
-  const mixers = new Set(); // animaciones activas, una por ficha con modelo
-
-  // Instancias ya parseadas que han quedado libres, por personaje. Entre ronda
-  // y ronda las fichas se destruyen y se vuelven a crear: reutilizarlas evita
-  // volver a parsear el .glb (y el parpadeo del cartel mientras tanto).
+  // Instancias de modelo ya parseadas y libres: entre ronda y ronda las fichas
+  // se destruyen y se recrean, y reutilizarlas evita volver a parsear el .glb.
   const modelPool = new Map();
   function takeFromPool(char) {
     const libres = modelPool.get(char.id);
@@ -339,18 +251,16 @@ export function createScene(container) {
   function returnToPool(char, res) {
     let libres = modelPool.get(char.id);
     if (!libres) modelPool.set(char.id, (libres = []));
-    if (libres.length < 8) libres.push(res); // tope por si acaso
+    if (libres.length < 8) libres.push(res);
     else disposeTree(res.root);
   }
 
-  // Sustituye el cartel de una ficha por su modelo 3D cuando este disponible
   function attachModel(tok, char) {
-    // Si ya hay una instancia libre la ponemos en el mismo momento, sin esperar
     const libre = takeFromPool(char);
     if (libre) { useModel(tok, char, libre); return; }
     instantiateModel(char).then((res) => {
-      if (!res) return;                                   // no hay modelo: se queda el cartel
-      if (!tok.group.parent) { returnToPool(char, res); return; } // la ficha ya no existe
+      if (!res) return;
+      if (!tok.group.parent) { returnToPool(char, res); return; }
       useModel(tok, char, res);
     });
   }
@@ -358,30 +268,24 @@ export function createScene(container) {
   function useModel(tok, char, res) {
     tok.instancia = res;
     tok.char = char;
-    setModelOpacity(res.root, 1); // pudo quedar a medias de un desvanecido
+    setModelOpacity(res.root, 1);
     tok.fade = 1;
-    tok.group.add(res.root);
-    tok.model = res.root;
-    tok.model.rotation.y = tok.facing || 0; // orientacion ya calculada en syncUnits
-
-    // El modelo va solo sobre la cubierta: fuera el cartel y fuera la peana.
-    // Se queda la sombra para que no parezca que flota, y el aro dorado del
-    // capitan bajado a ras de suelo.
+    res.root.rotation.y = tok.facing || 0;
+    tok.modelo = res.root;
+    tok.pivote.add(res.root);
+    // Con modelo no hace falta el cartel, pero si una chapa con el nombre
     tok.panel.visible = false;
-    tok.base.visible = false;
-    if (tok.ring) tok.ring.position.y = 0.03;
-
-    // El cartel llevaba el nombre y las estrellas dibujados: con modelo hay
-    // que ponerlos aparte para seguir sabiendo quien es y de que nivel va.
-    tok.badge = makeNameBadge(char, tok.star);
-    tok.group.add(tok.badge);
-
+    if (!tok.badge) {
+      tok.badge = makeNameBadge(char, tok.star);
+      tok.pivote.add(tok.badge);
+    }
     if (res.animations.length) {
       const mixer = new THREE.AnimationMixer(res.root);
       mixer.clipAction(res.animations[0]).play();
       tok.mixer = mixer;
       mixers.add(mixer);
     }
+    colocarToken(tok);
   }
 
   function releaseModel(tok) {
@@ -390,26 +294,22 @@ export function createScene(container) {
       mixers.delete(tok.mixer);
       tok.mixer = null;
     }
-    // El modelo se guarda para la siguiente ficha del mismo personaje en vez de
-    // destruirlo: hay que sacarlo del grupo antes de que se libere el resto.
     if (tok.instancia) {
-      tok.group.remove(tok.instancia.root);
+      tok.pivote.remove(tok.instancia.root);
       returnToPool(tok.char, tok.instancia);
       tok.instancia = null;
-      tok.model = null;
+      tok.modelo = null;
     }
-    // La etiqueta comparte textura entre fichas iguales: hay que sacarla del
-    // grupo antes de destruirlo para que no se lleve la textura por delante.
+    // La chapa comparte textura entre fichas iguales: hay que sacarla del grupo
+    // antes de destruirlo para que no se lleve la textura por delante.
     if (tok.badge) {
-      tok.group.remove(tok.badge);
+      tok.pivote.remove(tok.badge);
       tok.badge.material.dispose();
       tok.badge = null;
     }
   }
 
-  // Etiqueta flotante con el nombre y las estrellas, para las fichas que usan
-  // modelo 3D: al no tener el cartel, es lo unico que dice quien es y de que
-  // nivel va.
+  // Chapa con el nombre y las estrellas, para las fichas con modelo
   const labelTextures = new Map();
   const LABEL_W = 256;
   const LABEL_H = 64;
@@ -419,13 +319,9 @@ export function createScene(container) {
     const cached = labelTextures.get(key);
     if (cached) return cached;
 
-    const c = document.createElement('canvas');
-    c.width = LABEL_W; c.height = LABEL_H;
+    const c = lienzo(LABEL_W, LABEL_H);
     const g = c.getContext('2d');
     const estrellas = '★'.repeat(n);
-
-    // Todo en una linea: "Nombre ★★". La letra encoge si el nombre es largo
-    // o si lleva muchas estrellas, para que la chapa no crezca sin control.
     let size = 30;
     const medir = () => {
       g.font = `bold ${size}px system-ui, sans-serif`;
@@ -434,17 +330,13 @@ export function createScene(container) {
       return { wn, we: g.measureText(estrellas).width };
     };
     let m = medir();
-    while (m.wn + m.we > LABEL_W - 30 && size > 15) {
-      size -= 2;
-      m = medir();
-    }
+    while (m.wn + m.we > LABEL_W - 30 && size > 15) { size -= 2; m = medir(); }
 
     const anchoTexto = m.wn + m.we;
     const anchoCaja = Math.min(LABEL_W - 4, anchoTexto + 26);
     const x0 = (LABEL_W - anchoCaja) / 2;
     const y0 = (LABEL_H - 44) / 2;
-
-    g.fillStyle = 'rgba(9,20,38,0.84)';
+    g.fillStyle = 'rgba(9,20,38,0.86)';
     roundRect(g, x0, y0, anchoCaja, 44, 13);
     g.fill();
     g.strokeStyle = CREW_COLORS[crew] || 'rgba(255,255,255,.5)';
@@ -452,7 +344,6 @@ export function createScene(container) {
     roundRect(g, x0, y0, anchoCaja, 44, 13);
     g.stroke();
 
-    // El texto se dibuja de izquierda a derecha desde el centro de la chapa
     const xIni = (LABEL_W - anchoTexto) / 2;
     g.textAlign = 'left';
     g.textBaseline = 'middle';
@@ -463,107 +354,88 @@ export function createScene(container) {
     g.font = `bold ${size - 4}px system-ui, sans-serif`;
     g.fillText(estrellas, xIni + m.wn, LABEL_H / 2 + 1);
 
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
+    const tex = aTextura(c);
     labelTextures.set(key, tex);
     return tex;
   }
 
-  // Alto de la chapa en unidades de mundo y altura a la que flota: justo
-  // encima de la cabeza del modelo (MODEL_HEIGHT) y por debajo de las barras
-  // de vida y mana, que van a 1.62 y 1.49.
-  const LABEL_SCALE = 0.9;
   function makeNameBadge(char, star) {
-    const alto = LABEL_SCALE * (LABEL_H / LABEL_W);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: labelTexture(char.name, star, char.crew), transparent: true, depthTest: false,
     }));
-    sprite.scale.set(LABEL_SCALE, alto, 1);
-    sprite.position.set(0, MODEL_HEIGHT + alto / 2 + 0.08, 0);
-    sprite.renderOrder = 4;
+    sprite.scale.set(1.05, 1.05 * (LABEL_H / LABEL_W), 1);
+    sprite.position.set(0, MODEL_HEIGHT + 0.14, 0);
+    sprite.renderOrder = 7;
     return sprite;
   }
 
   function makeToken(char) {
     const group = new THREE.Group();
+    // El grupo se coloca en pixeles; dentro, un pivote escalado deja que el
+    // modelo viva en sus propias unidades y aqui solo se ajuste el tamano
+    // segun la fila (perspectiva del dibujo).
+    const pivote = new THREE.Group();
+    group.add(pivote);
 
-    const crewColor = CREW_COLORS[char.crew] || '#3a6ea8';
-    const base = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({
-      color: crewColor, roughness: 0.5, metalness: 0.15,
-    }));
-    base.position.y = 0.06;
-    group.add(base);
+    // Sombra aplastada, para que la ficha no parezca flotar sobre la cubierta
+    const sombra = new THREE.Mesh(
+      new THREE.CircleGeometry(0.38, 20),
+      new THREE.MeshBasicMaterial({ color: '#241a0e', transparent: true, opacity: 0.32, depthTest: false })
+    );
+    sombra.scale.set(1, 0.45, 1);
+    sombra.position.y = 0.02;
+    sombra.renderOrder = 2;
+    pivote.add(sombra);
 
-    let ring = null;
-    if (char.captain) {
-      ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({
-        color: '#ffd23f', roughness: 0.3, metalness: 0.7,
-      }));
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.13;
-      group.add(ring);
-    }
-
+    // Cartel del personaje: lo que se ve mientras no tenga modelo 3D
     const panelMat = new THREE.MeshBasicMaterial({
       map: getCharTexture(char), transparent: true, side: THREE.DoubleSide,
     });
-    const panel = new THREE.Mesh(panelGeo, panelMat);
-    panel.position.y = 0.7;
-    group.add(panel);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.0), panelMat);
+    panel.position.y = 0.56;
+    panel.renderOrder = 4;
+    pivote.add(panel);
 
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-    shadow.position.y = 0.012;
-    group.add(shadow);
-
-    // Barra de vida (solo visible en combate)
-    const hpBack = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.72, 0.1),
-      new THREE.MeshBasicMaterial({ color: '#1a1a1a', transparent: true, opacity: 0.75 })
-    );
-    hpBack.position.y = 1.62;
-    hpBack.visible = false;
-    group.add(hpBack);
-
-    const hpFill = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.68, 0.07),
-      new THREE.MeshBasicMaterial({ color: '#3ddc84' })
-    );
-    hpFill.position.set(0, 1.62, 0.01);
-    hpFill.visible = false;
-    group.add(hpFill);
-
-    // Barra de mana, justo debajo de la de vida
-    const manaBack = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.72, 0.07),
-      new THREE.MeshBasicMaterial({ color: '#0b1a33', transparent: true, opacity: 0.8 })
-    );
-    manaBack.position.y = 1.49;
-    manaBack.visible = false;
-    group.add(manaBack);
-
-    const manaFill = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.68, 0.045),
-      new THREE.MeshBasicMaterial({ color: '#4dc3ff' })
-    );
-    manaFill.position.set(0, 1.49, 0.01);
-    manaFill.visible = false;
-    group.add(manaFill);
+    const barra = (color, anchoB, altoB, y, orden) => {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(anchoB, altoB),
+        new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false })
+      );
+      m.position.set(0, y, 0.02);
+      m.visible = false;
+      m.renderOrder = orden;
+      pivote.add(m);
+      return m;
+    };
+    const hpBack = barra('#12161f', 0.8, 0.12, 1.45, 5);
+    const hpFill = barra('#3ddc84', 0.74, 0.085, 1.45, 6);
+    const manaBack = barra('#0b1a33', 0.8, 0.085, 1.32, 5);
+    const manaFill = barra('#4dc3ff', 0.74, 0.05, 1.32, 6);
 
     world.add(group);
     const tok = {
-      group, panel, base, ring, hpBack, hpFill, manaBack, manaFill, panelMat,
-      star: char.star || 1, model: null, mixer: null, badge: null,
+      group, pivote, panel, panelMat, sombra,
+      hpBack, hpFill, manaBack, manaFill,
+      star: char.star || 1, modelo: null, mixer: null, badge: null, instancia: null,
+      col: 0, row: 0, facing: 0, selected: false, fade: 1,
     };
-    // Si el personaje tiene un .glb subido, sustituye al cartel al llegar
     attachModel(tok, char);
     return tok;
   }
 
+  // Coloca la ficha: posicion en pixeles del centro de su casilla, tamano segun
+  // la fila y profundidad para que las de delante tapen a las de atras.
+  function colocarToken(tok) {
+    const [mx, my] = aMundo(centroCelda(tok.col, tok.row));
+    const escala = (anchoCelda(tok.col, tok.row) * 1.32) / MODEL_HEIGHT;
+    tok.group.position.set(mx, my, tok.row * 60);
+    tok.pivote.scale.setScalar(escala);
+    tok.pivote.position.y = tok.selected ? escala * MODEL_HEIGHT * 0.16 : 0;
+  }
+
   /**
-   * Sincroniza las fichas visibles. `units` es la lista completa de lo que
-   * debe verse ahora mismo; lo que no aparezca se elimina.
-   * Cada unidad: { uid, char, col, row, selected, hpFrac, showHp, opacity }
-   * (col/row pueden ser decimales para interpolar movimiento en combate)
+   * Sincroniza las fichas visibles. Cada unidad:
+   * { uid, char, col, row, mine, selected, showHp, hpFrac, mana, maxMana, opacity }
    */
   function syncUnits(units) {
     const seen = new Set();
@@ -575,70 +447,55 @@ export function createScene(container) {
         tok.star = u.char.star;
         tokens.set(u.uid, tok);
       } else if (tok.star !== u.char.star) {
-        // subio de estrella conservando el uid: hay que rehacer el cartel
         tok.star = u.char.star;
         tok.panelMat.map = getCharTexture(u.char);
         tok.panelMat.needsUpdate = true;
         if (tok.badge) tok.badge.material.map = labelTexture(u.char.name, tok.star, u.char.crew);
       }
-      const { x, z } = cellToWorld(u.col, u.row);
-      tok.group.position.set(x, 0, z);
+
+      tok.col = u.col;
+      tok.row = u.row;
+      tok.selected = !!u.selected;
+      // Cada bando mira al contrario, vaya por donde vaya durante el combate.
+      // Los modelos vienen mirando al +Z (hacia la camara), asi que los mios
+      // se giran media vuelta para encarar el fondo.
+      tok.facing = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
+      if (tok.modelo) tok.modelo.rotation.y = tok.facing;
+      colocarToken(tok);
       tok.group.visible = true;
 
       const op = u.opacity === undefined ? 1 : u.opacity;
       tok.panelMat.opacity = op;
-      tok.base.material.opacity = op;
-      tok.base.material.transparent = op < 1;
-
-      // El panel siempre mira a la camara para que se lea bien el personaje
-      tok.panel.quaternion.copy(camera.quaternion);
-
-      // Cada bando mira hacia el contrario. Va por bando y no por la fila en la
-      // que este: durante el combate las unidades avanzan a la mitad rival y si
-      // fuese por fila se darian media vuelta al cruzar el centro.
-      tok.facing = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
-      if (tok.model) {
-        tok.model.rotation.y = tok.facing;
-        if (tok.fade !== op) {
-          tok.fade = op;
-          setModelOpacity(tok.model, op);
-        }
+      tok.sombra.material.opacity = 0.32 * op;
+      if (tok.modelo && tok.fade !== op) {
+        tok.fade = op;
+        setModelOpacity(tok.modelo, op);
       }
       if (tok.badge) tok.badge.material.opacity = op;
 
       if (u.showHp) {
+        const frac = Math.max(0, Math.min(1, u.hpFrac));
         tok.hpBack.visible = true;
         tok.hpFill.visible = true;
-        tok.hpBack.quaternion.copy(camera.quaternion);
-        tok.hpFill.quaternion.copy(camera.quaternion);
-        const frac = Math.max(0, Math.min(1, u.hpFrac));
         tok.hpFill.scale.x = frac || 0.0001;
-        // escalar encoge desde el centro: desplazamos para que se vacie por la derecha
-        tok.hpFill.position.set(-(1 - frac) * 0.34, 1.62, 0.01);
+        tok.hpFill.position.x = -(1 - frac) * 0.37;
         tok.hpFill.material.color.set(frac > 0.5 ? '#3ddc84' : frac > 0.25 ? '#ffd23f' : '#ff5d6c');
       } else {
         tok.hpBack.visible = false;
         tok.hpFill.visible = false;
       }
 
-      // Barra de mana: solo tiene sentido si el personaje tiene habilidad
       if (u.showHp && u.maxMana > 0) {
+        const mf = Math.max(0, Math.min(1, (u.mana || 0) / u.maxMana));
         tok.manaBack.visible = true;
         tok.manaFill.visible = true;
-        tok.manaBack.quaternion.copy(camera.quaternion);
-        tok.manaFill.quaternion.copy(camera.quaternion);
-        const mf = Math.max(0, Math.min(1, (u.mana || 0) / u.maxMana));
         tok.manaFill.scale.x = mf || 0.0001;
-        tok.manaFill.position.set(-(1 - mf) * 0.34, 1.49, 0.01);
-        // al llenarse parpadea en dorado: la habilidad esta a punto de salir
+        tok.manaFill.position.x = -(1 - mf) * 0.37;
         tok.manaFill.material.color.set(mf >= 1 ? '#ffd23f' : '#4dc3ff');
       } else {
         tok.manaBack.visible = false;
         tok.manaFill.visible = false;
       }
-
-      // Realce de seleccion: la ficha flota un poco
-      tok.group.position.y = u.selected ? 0.22 : 0;
     }
     for (const [uid, tok] of tokens) {
       if (!seen.has(uid)) {
@@ -650,9 +507,6 @@ export function createScene(container) {
     }
   }
 
-  // Desvanecido de un modelo (al morir la ficha). Cada ficha parsea su propio
-  // .glb, asi que sus materiales son suyos y se pueden tocar sin efectos
-  // secundarios en las demas.
   function setModelOpacity(modelo, op) {
     modelo.traverse((o) => {
       if (!o.material) return;
@@ -663,181 +517,174 @@ export function createScene(container) {
     });
   }
 
-  // ---------------- Resaltado de casillas ----------------
-  function setHighlights(cells) {
-    const key = new Set((cells || []).map((c) => `${c.col},${c.row}`));
-    for (const tile of tiles) {
-      const on = key.has(`${tile.userData.col},${tile.userData.row}`);
-      tile.material.color.set(on ? '#ffd23f' : tile.userData.baseColor);
-      tile.material.opacity = on ? 0.72 : 0.5;
-      tile.position.y = on ? 0.07 : 0.04;
-    }
-  }
-
-  // ---------------- Onda expansiva al lanzar una habilidad ----------------
-  const bursts = [];
-  const burstGeo = new THREE.RingGeometry(0.3, 0.45, 24);
-  burstGeo.rotateX(-Math.PI / 2);
-  function addAbilityBurst(col, row) {
-    const mesh = new THREE.Mesh(burstGeo, new THREE.MeshBasicMaterial({
-      color: '#ffd23f', transparent: true, side: THREE.DoubleSide, depthWrite: false,
-    }));
-    const { x, z } = cellToWorld(col, row);
-    mesh.position.set(x, 0.1, z);
-    world.add(mesh);
-    bursts.push({ mesh, born: performance.now() });
-  }
-
-  function updateBursts(now) {
-    for (let i = bursts.length - 1; i >= 0; i--) {
-      const b = bursts[i];
-      const age = (now - b.born) / 550;
-      if (age >= 1) {
-        world.remove(b.mesh);
-        b.mesh.material.dispose();
-        bursts.splice(i, 1);
-        continue;
-      }
-      const s = 1 + age * 3.2;
-      b.mesh.scale.set(s, s, s);
-      b.mesh.material.opacity = 1 - age;
-    }
-  }
-
-  // ---------------- Textos flotantes (dano, curacion...) ----------------
+  // ---------------- Efectos ----------------
   const floats = [];
   function addFloatingText(col, row, text, color, wide) {
-    // Los nombres de habilidad son largos: el lienzo se ensancha y la fuente se
-    // encoge hasta que el texto cabe entero (antes se cortaba a media palabra).
-    const canvas = document.createElement('canvas');
-    canvas.width = wide ? 512 : 256;
-    canvas.height = 128;
-    const c = canvas.getContext('2d');
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    let size = wide ? 56 : 68;
-    const maxW = canvas.width - 24;
-    c.font = `bold ${size}px sans-serif`;
-    while (c.measureText(text).width > maxW && size > 16) {
-      size -= 3;
-      c.font = `bold ${size}px sans-serif`;
+    const w = wide ? 512 : 256;
+    const c = lienzo(w, 128);
+    const g = c.getContext('2d');
+    let size = wide ? 54 : 74;
+    g.font = `bold ${size}px system-ui, sans-serif`;
+    while (g.measureText(text).width > w - 20 && size > 20) {
+      size -= 4;
+      g.font = `bold ${size}px system-ui, sans-serif`;
     }
-    c.lineWidth = Math.max(5, size * 0.15);
-    c.strokeStyle = 'rgba(0,0,0,0.85)';
-    c.strokeText(text, canvas.width / 2, 64);
-    c.fillStyle = color;
-    c.fillText(text, canvas.width / 2, 64);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 9;
+    g.strokeStyle = 'rgba(0,0,0,0.85)';
+    g.strokeText(text, w / 2, 64);
+    g.fillStyle = color || '#ffffff';
+    g.fillText(text, w / 2, 64);
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-    const { x, z } = cellToWorld(col, row);
-    sprite.position.set(x, 1.85, z);
-    sprite.scale.set(wide ? 2.2 : 1.1, 0.55, 1);
+    const base = anchoCelda(col, row);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: aTextura(c), transparent: true, depthTest: false,
+    }));
+    const escala = base * (wide ? 2.0 : 1.1);
+    sprite.scale.set(escala, escala * 0.5, 1);
+    const [mx, my] = aMundo(centroCelda(col, row));
+    const y0 = my + base * 1.5;
+    sprite.position.set(mx, y0, 12000);
+    sprite.renderOrder = 20;
     world.add(sprite);
-    floats.push({ sprite, born: performance.now(), tex });
+    floats.push({ sprite, t0: performance.now(), dur: 900, y0, subida: base * 0.8 });
   }
 
   function updateFloats(now) {
     for (let i = floats.length - 1; i >= 0; i--) {
       const f = floats[i];
-      const age = (now - f.born) / 900;
-      if (age >= 1) {
+      const k = (now - f.t0) / f.dur;
+      if (k >= 1) {
         world.remove(f.sprite);
         f.sprite.material.map.dispose();
         f.sprite.material.dispose();
         floats.splice(i, 1);
         continue;
       }
-      f.sprite.position.y = 1.85 + age * 0.9;
-      f.sprite.material.opacity = 1 - age;
+      f.sprite.position.y = f.y0 + f.subida * k;
+      f.sprite.material.opacity = 1 - k * k;
     }
   }
 
-  // ---------------- Rayos de ataque ----------------
   const beams = [];
-  const beamMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true });
   function addAttackBeam(fromCol, fromRow, toCol, toRow) {
-    const a = cellToWorld(fromCol, fromRow);
-    const b = cellToWorld(toCol, toRow);
-    const start = new THREE.Vector3(a.x, 0.62, a.z);
-    const end = new THREE.Vector3(b.x, 0.62, b.z);
-    const dir = new THREE.Vector3().subVectors(end, start);
-    const len = dir.length();
-    if (len < 0.001) return;
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, len, 6), beamMat.clone());
-    mesh.position.copy(start).add(dir.clone().multiplyScalar(0.5));
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-    world.add(mesh);
-    beams.push({ mesh, born: performance.now() });
+    const base = anchoCelda(fromCol, fromRow);
+    const a = aMundo(centroCelda(fromCol, fromRow));
+    const b = aMundo(centroCelda(toCol, toRow));
+    const alturaGolpe = base * 0.6;
+    a[1] += alturaGolpe;
+    b[1] += alturaGolpe;
+    const largo = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (largo < 1) return;
+    const malla = new THREE.Mesh(
+      new THREE.PlaneGeometry(largo, Math.max(2, base * 0.055)),
+      new THREE.MeshBasicMaterial({ color: '#fff0b8', transparent: true, opacity: 0.9, depthTest: false })
+    );
+    malla.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 11000);
+    malla.rotation.z = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    malla.renderOrder = 15;
+    world.add(malla);
+    beams.push({ malla, t0: performance.now(), dur: 190 });
   }
 
   function updateBeams(now) {
     for (let i = beams.length - 1; i >= 0; i--) {
       const b = beams[i];
-      const age = (now - b.born) / 200;
-      if (age >= 1) {
-        world.remove(b.mesh);
-        b.mesh.geometry.dispose();
-        b.mesh.material.dispose();
+      const k = (now - b.t0) / b.dur;
+      if (k >= 1) {
+        world.remove(b.malla);
+        b.malla.geometry.dispose();
+        b.malla.material.dispose();
         beams.splice(i, 1);
         continue;
       }
-      b.mesh.material.opacity = 1 - age;
+      b.malla.material.opacity = 0.9 * (1 - k);
     }
   }
 
-  // ---------------- Seleccion de casilla (raycasting) ----------------
-  const raycaster = new THREE.Raycaster();
-  const pointer = new THREE.Vector2();
-  function pickCell(clientX, clientY) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(tiles, false);
-    if (!hits.length) return null;
-    const { col, row } = hits[0].object.userData;
-    return { col, row };
+  const bursts = [];
+  function addAbilityBurst(col, row) {
+    const base = anchoCelda(col, row);
+    const [mx, my] = aMundo(centroCelda(col, row));
+    const anillo = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.5, 32),
+      new THREE.MeshBasicMaterial({
+        color: '#ffd23f', transparent: true, opacity: 0.95,
+        side: THREE.DoubleSide, depthTest: false,
+      })
+    );
+    // aplastado, para que se lea como un circulo tumbado en la cubierta
+    anillo.scale.set(base, base * 0.42, 1);
+    anillo.position.set(mx, my, 10000);
+    anillo.renderOrder = 12;
+    world.add(anillo);
+    bursts.push({ anillo, t0: performance.now(), dur: 480, base });
   }
 
-  // ---------------- Bucle de render ----------------
+  function updateBursts(now) {
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const b = bursts[i];
+      const k = (now - b.t0) / b.dur;
+      if (k >= 1) {
+        world.remove(b.anillo);
+        b.anillo.geometry.dispose();
+        b.anillo.material.dispose();
+        bursts.splice(i, 1);
+        continue;
+      }
+      const s = b.base * (1 + k * 2.2);
+      b.anillo.scale.set(s, s * 0.42, 1);
+      b.anillo.material.opacity = 0.95 * (1 - k);
+    }
+  }
+
+  // ---------------- Interfaz del modulo ----------------
+  function recolocarTodo() {
+    for (const tok of tokens.values()) colocarToken(tok);
+    pintarHighlights();
+  }
+
+  function setInsets(top, bottom) {
+    insetTop = top || 0;
+    insetBottom = bottom || 0;
+    calcularEncaje();
+    recolocarTodo();
+  }
+
+  function setBoard(nextCols, nextRows) {
+    cols = nextCols;
+    rows = nextRows;
+    calcularEncaje();
+    recolocarTodo();
+  }
+
+  function pickCell(clientX, clientY) {
+    const r = renderer.domElement.getBoundingClientRect();
+    return pantallaACelda(clientX - r.left, clientY - r.top);
+  }
+
   function resize() {
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    ancho = container.clientWidth || 1;
+    alto = container.clientHeight || 1;
+    renderer.setSize(ancho, alto, false);
+    camera.left = 0;
+    camera.right = ancho;
+    camera.top = alto;
+    camera.bottom = 0;
     camera.updateProjectionMatrix();
-    placeCamera(); // el encuadre depende de la proporcion de la pantalla
+    calcularEncaje();
+    recolocarTodo();
   }
 
   let running = true;
-  const clock = new THREE.Clock();
-  const mixerClock = new THREE.Clock(); // aparte: getDelta() consume el tiempo
+  const relojMixers = new THREE.Clock();
   function animate() {
     if (!running) return;
     requestAnimationFrame(animate);
     const now = performance.now();
-    const t = clock.getElapsedTime();
-
-    // animaciones de los modelos 3D que las traigan
-    const dt = mixerClock.getDelta();
+    const dt = relojMixers.getDelta();
     if (mixers.size) for (const m of mixers) m.update(dt);
-
-    // oleaje suave del mar
-    const arr = oceanGeo.attributes.position.array;
-    for (let i = 0; i < arr.length; i += 3) {
-      const bx = oceanBase[i];
-      const bz = oceanBase[i + 2];
-      arr[i + 1] = Math.sin(bx * 0.22 + t * 0.9) * 0.22 + Math.cos(bz * 0.3 + t * 0.7) * 0.18;
-    }
-    oceanGeo.attributes.position.needsUpdate = true;
-
-    // balanceo muy leve del barco, para dar sensacion de estar en el mar
-    world.rotation.z = Math.sin(t * 0.55) * 0.012;
-    world.rotation.x = Math.cos(t * 0.42) * 0.008;
-
     updateFloats(now);
     updateBeams(now);
     updateBursts(now);
@@ -853,7 +700,6 @@ export function createScene(container) {
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
-  setBoard(cols, rows);
   resize();
   animate();
   window.addEventListener('resize', resize);
@@ -865,111 +711,97 @@ export function createScene(container) {
     get cols() { return cols; },
     get rows() { return rows; },
     get tokens() { return tokens; }, // solo para pruebas automatizadas
+    // Utilidades para las pruebas: donde cae cada casilla y como esta encajado
+    // el dibujo de fondo.
+    __debug: {
+      esquinaCelda: (col, row) => celdaAPantalla(col, row),
+      centroCelda: (col, row) => centroCelda(col, row),
+      anchoCelda: (col, row) => anchoCelda(col, row),
+      encaje: () => ({ ...fit, ancho, alto }),
+      resaltados: () => highlightGroup.children.length,
+    },
   };
 }
 
 // ---------------- Utilidades de dibujo ----------------
 
+function lienzo(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+function aTextura(canvas) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // "Cartel de se busca" del personaje: retrato si lo hay, si no sus iniciales
-// sobre el color de su tripulacion. Se usa como textura del panel vertical.
 function drawCharCanvas(char, portraitImg) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 320;
+  const canvas = lienzo(256, 320);
   const c = canvas.getContext('2d');
   const crewColor = CREW_COLORS[char.crew] || '#3a6ea8';
 
-  // Fondo tipo pergamino con marco de madera
-  c.fillStyle = '#f0dfb4';
+  c.fillStyle = '#f0e2c0';
   roundRect(c, 6, 6, 244, 308, 14);
   c.fill();
-  c.lineWidth = 10;
-  c.strokeStyle = char.captain ? '#ffd23f' : '#6b4423';
+  c.strokeStyle = crewColor;
+  c.lineWidth = 8;
   roundRect(c, 6, 6, 244, 308, 14);
   c.stroke();
 
-  // Zona del retrato
-  const px = 26, py = 34, pw = 204, ph = 204;
+  const px = 20, py = 20, pw = 216, ph = 220;
   c.save();
   roundRect(c, px, py, pw, ph, 10);
   c.clip();
-  if (portraitImg && portraitImg.complete && portraitImg.naturalWidth) {
-    // recorte tipo "cover" para no deformar la imagen
-    const s = Math.max(pw / portraitImg.naturalWidth, ph / portraitImg.naturalHeight);
-    const dw = portraitImg.naturalWidth * s;
-    const dh = portraitImg.naturalHeight * s;
-    c.drawImage(portraitImg, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh);
+  if (portraitImg) {
+    const escala = Math.max(pw / portraitImg.width, ph / portraitImg.height);
+    const w = portraitImg.width * escala;
+    const h = portraitImg.height * escala;
+    c.drawImage(portraitImg, px + (pw - w) / 2, py + (ph - h) / 2, w, h);
   } else {
     c.fillStyle = crewColor;
     c.fillRect(px, py, pw, ph);
-    c.fillStyle = 'rgba(255,255,255,0.92)';
-    c.font = '900 92px sans-serif';
+    c.fillStyle = 'rgba(255,255,255,.92)';
+    c.font = 'bold 96px system-ui, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(char.initials, px + pw / 2, py + ph / 2 + 4);
+    c.fillText(char.initials || '?', px + pw / 2, py + ph / 2);
   }
   c.restore();
 
-  // Corona para los capitanes
-  if (char.captain) {
-    c.font = '44px sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('👑', 128, 40);
-  }
-
-  // Estrellas del personaje, en una banda oscura sobre el retrato: hay que
-  // poder ver de un vistazo el nivel de cada ficha tambien durante el combate.
   const star = char.star || 0;
   if (star > 0) {
     const sw = 30 * star + 14;
     const sx = 128 - sw / 2;
-    c.fillStyle = 'rgba(20,16,10,0.82)';
+    c.fillStyle = 'rgba(20,16,10,.85)';
     roundRect(c, sx, 208, sw, 38, 10);
     c.fill();
     c.strokeStyle = '#ffd23f';
-    c.lineWidth = 2.5;
+    c.lineWidth = 3;
     roundRect(c, sx, 208, sw, 38, 10);
     c.stroke();
     c.fillStyle = '#ffd23f';
-    c.font = '900 26px sans-serif';
+    c.font = 'bold 26px system-ui, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillText('★'.repeat(star), 128, 228);
   }
 
-  // Banda inferior con el nombre
   c.fillStyle = crewColor;
   roundRect(c, 20, 250, 216, 50, 8);
   c.fill();
   c.fillStyle = '#fff';
+  c.font = 'bold 30px system-ui, sans-serif';
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  let fontSize = 30;
-  c.font = `900 ${fontSize}px sans-serif`;
-  while (c.measureText(char.name).width > 196 && fontSize > 12) {
-    fontSize -= 2;
-    c.font = `900 ${fontSize}px sans-serif`;
+  let nombre = char.name || '';
+  while (c.measureText(nombre).width > 200 && nombre.length > 3) {
+    nombre = `${nombre.slice(0, -2)}…`;
   }
-  c.fillText(char.name, 128, 276);
+  c.fillText(nombre, 128, 276);
 
   return canvas;
-}
-
-function makeJollyRogerTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 86;
-  const c = canvas.getContext('2d');
-  c.fillStyle = '#12100f';
-  c.fillRect(0, 0, 128, 86);
-  c.font = '52px sans-serif';
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  c.fillText('☠️', 64, 45);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }
 
 function roundRect(c, x, y, w, h, r) {
