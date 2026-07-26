@@ -201,65 +201,84 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .bottom-ui {
   bottom: 0; left: 0; right: 0;
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(0deg, rgba(8,20,40,.94), rgba(8,20,40,.8) 60%, rgba(8,20,40,0));
+  background: linear-gradient(0deg, rgba(4,12,28,.72), rgba(4,12,28,.45) 55%, rgba(4,12,28,0));
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
 .bottom-ui > * { width: 100%; max-width: 720px; margin: 0 auto; }
-.action-row { display: flex; align-items: center; gap: 6px; }
+.action-row { position: relative; display: flex; align-items: center; max-width: 470px; }
 .action-row .btn { flex: 0 0 auto; width: auto; margin: 0; padding: 8px 10px; font-size: 12px; }
 .action-row .btn .lbl { display: none; }
 
+/* El banquillo es el barril con la bandera pirata: los huecos van colocados
+   encima del dibujo (porcentajes medidos sobre la propia imagen). */
 .bench {
-  flex: 1 1 auto;
-  display: flex;
-  gap: 5px;
-  background: rgba(12,30,58,.75);
-  border-radius: 10px;
-  padding: 5px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  border: 1px solid rgba(255,255,255,.12);
-  min-height: 54px;
+  position: relative;
+  width: 100%;
+  max-width: 470px;
+  margin: 0 auto;
+  aspect-ratio: 2114 / 416;
+  background: url('../img/ui/bench.webp') no-repeat center / 100% 100%;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.5));
 }
 .bench-slot {
-  width: 44px;
-  height: 44px;
+  position: absolute;
   border-radius: 8px;
-  background: rgba(255,255,255,.06);
-  border: 2px dashed rgba(255,255,255,.15);
-  flex-shrink: 0;
 }
 
+/* Vender = tirar la ficha al barril del banquillo */
 .sell-zone {
-  flex: 0 0 auto;
-  padding: 9px 11px;
-  text-align: center;
-  border: 2px dashed rgba(255,120,120,.6);
-  border-radius: 10px;
-  font-size: 17px;
-  color: #ffb0b0;
-  cursor: pointer;
-}
-.sell-zone.drop-hover { background: rgba(255,80,80,.25); }
-
-.shop {
+  position: absolute;
+  left: 6.8%; top: 12%;
+  width: 14.2%; height: 84%;
   display: flex;
-  gap: 5px;
-  background: rgba(12,30,58,.75);
-  border-radius: 10px;
-  padding: 5px;
-  border: 1px solid rgba(255,255,255,.12);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  justify-content: flex-start;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 44% 44% 38% 38%;
+  cursor: pointer;
+  z-index: 2;
+}
+.sell-zone .sz-txt {
+  font-size: clamp(7px, 2.1vw, 10px);
+  font-weight: 900;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: #ffe9ac;
+  background: rgba(0,0,0,.6);
+  border-radius: 6px;
+  padding: 0 3px;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+}
+.sell-zone.armada .sz-txt { color: #fff0b8; background: rgba(160,20,20,.9); }
+.sell-zone.drop-hover, .sell-zone:hover { background: rgba(255,70,70,.3); box-shadow: inset 0 0 14px rgba(255,90,90,.65); }
+
+/* La tienda es el tablon de madera: las cartas se reparten por su interior */
+.shop {
+  position: relative;
+  width: 100%;
+  max-width: 470px;
+  margin: 0 auto;
+  aspect-ratio: 3.5;
+  background: url('../img/ui/shop.webp') no-repeat center / 100% 100%;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
+}
+.shop-inner {
+  position: absolute;
+  inset: 11% 4.2% 11.5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 1.5%;
 }
 
 .unit-card {
-  width: 96px;
-  flex-shrink: 0;
+  height: 100%;
+  aspect-ratio: 406 / 532;
+  flex: 0 1 auto;
+  min-width: 0;
   border-radius: 12px;
   padding: 6px;
   text-align: center;
@@ -273,10 +292,40 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .unit-card:hover { transform: translateY(-4px); }
 .unit-card .uc-name { font-size: 11px; font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .unit-card .uc-cost { position: absolute; top: 3px; left: 5px; background: var(--gold); color: #221900; font-weight: 900; font-size: 11px; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,.4); }
-.unit-card.locked { opacity: .45; cursor: not-allowed; }
-.uc-sold { opacity: .5; padding-top: 26px; font-size: 12px; }
+.unit-card.locked { opacity: .5; cursor: not-allowed; filter: grayscale(.55); }
+.unit-card.empty { border-style: dashed; border-color: rgba(255,255,255,.14); background: rgba(0,0,0,.22); display: flex; align-items: center; justify-content: center; }
+.uc-sold { opacity: .5; font-size: 11px; }
 .unit-card.captain, .bench-unit.captain { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255,210,63,.6), 0 4px 10px rgba(0,0,0,.3); }
 .captain-badge { position: absolute; top: 1px; right: 3px; font-size: 15px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+
+/* ---------- Cartas ilustradas (public/img/cards/<id>.png) ---------- */
+/* El dibujo ya trae marco, nombre y un numero de coste que es solo decorativo:
+   quitamos nuestro marco y pintamos el coste real justo encima del impreso. */
+.unit-card.has-art, .bench-unit.has-art {
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.unit-card.has-art { filter: drop-shadow(0 3px 6px rgba(0,0,0,.55)); }
+.uc-art {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+.unit-card.has-art .uc-cost {
+  left: 5.2%; top: 4.6%;
+  width: 22.2%; height: 17%;
+  border-radius: 50%;
+  font-size: clamp(9px, 3.4vw, 14px);
+  border: 2px solid rgba(90,52,0,.85);
+  box-shadow: 0 1px 3px rgba(0,0,0,.6);
+}
+.unit-card.has-art.captain { box-shadow: none; }
+.unit-card.has-art.captain .uc-art { filter: drop-shadow(0 0 4px rgba(255,210,63,.85)); }
 
 /* "Cartel de se busca": avatar generado con iniciales, sin imagenes externas */
 .unit-avatar {
@@ -300,6 +349,9 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 
 .unit-avatar-img { padding: 0; overflow: hidden; background: #0e2140; }
 .unit-avatar-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; }
+/* Avatar sacado de la carta ilustrada: acercamos a la cara */
+.unit-avatar-img.uc-cara { background: #1a0f08; }
+.unit-avatar-img.uc-cara img { object-position: 50% 6%; transform: scale(2); border-radius: 0; }
 
 /* Colores por tripulacion (combos) */
 .uc-crew-strawhat { background: linear-gradient(160deg, #ff7a54, #b8321a); }
@@ -312,20 +364,37 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .uc-crew-baroque { background: linear-gradient(160deg, #ffa25c, #2a1a10); }
 
 .bench-unit {
-  width: 68px;
-  height: 68px;
-  border-radius: 10px;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: grab;
+  cursor: pointer;
   border: 2px solid rgba(255,255,255,.25);
   box-shadow: 0 3px 6px rgba(0,0,0,.35);
-  flex-shrink: 0;
+  transition: transform .1s ease;
 }
-.bench-unit .stars { position: absolute; bottom: -2px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--gold); text-shadow: 0 1px 1px #000; }
-.bench-unit.selected { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,210,63,.5), 0 3px 6px rgba(0,0,0,.35); transform: translateY(-3px); }
+/* En el hueco del banquillo no cabe la carta entera: se recorta a la cara,
+   que es lo que hace falta para reconocer al personaje de un vistazo. */
+.bench-unit.has-art {
+  border: 2px solid rgba(255,214,120,.65);
+  box-shadow: inset 0 0 8px rgba(0,0,0,.6);
+  overflow: hidden;
+  background: #1a0f08;
+}
+/* Encuadre sobre la cara, dejando fuera el numero de coste impreso en el arte
+   (que es decorativo y no coincide con el coste real del juego). */
+.bench-unit.has-art .uc-art {
+  position: absolute;
+  left: -57.5%;
+  top: -33%;
+  width: 215%;
+  height: auto;
+  object-fit: unset;
+}
+.bench-unit .stars { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; line-height: 1.35; letter-spacing: -2px; color: var(--gold); background: linear-gradient(0deg, rgba(0,0,0,.75), rgba(0,0,0,0)); text-shadow: 0 1px 1px #000; pointer-events: none; }
+.bench-unit.selected { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,210,63,.6), 0 3px 6px rgba(0,0,0,.35); transform: translateY(-4px) scale(1.06); }
 .bench-unit.dragging { opacity: .35; }
 
 .drag-ghost {
@@ -413,38 +482,26 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   .syn-info { display: none; }
   .syn-row { padding: 4px 6px; }
 
-  .unit-card { width: 62px; padding: 4px; }
+  .unit-card { padding: 4px; }
   .unit-avatar { width: 40px; height: 40px; font-size: 13px; }
   .unit-card .uc-name { font-size: 8px; }
-  .unit-card .uc-cost { width: 16px; height: 16px; font-size: 9px; top: 2px; left: 3px; }
+  .unit-card:not(.has-art) .uc-cost { width: 16px; height: 16px; font-size: 9px; top: 2px; left: 3px; }
   .captain-badge { font-size: 12px; }
-  .uc-sold { padding-top: 18px; font-size: 10px; }
+  .uc-sold { font-size: 10px; }
 
-  .bench-unit { width: 40px; height: 40px; }
   .bench-unit .unit-avatar { width: 29px; height: 29px; font-size: 10px; }
   .bench-unit .stars { font-size: 8px; }
-  .bench-slot { width: 40px; height: 40px; }
-  .bench { gap: 4px; padding: 4px; min-height: 48px; }
-  .action-row { gap: 4px; }
   .action-row .btn { padding: 8px 8px; }
-  .sell-zone { padding: 8px 9px; font-size: 15px; }
-
-  /* Compartiendo linea con los botones solo caben 3-4 huecos: en pantallas
-     estrechas el banquillo se lleva una fila entera para si. */
-  .action-row { flex-wrap: wrap; }
-  .bench { order: -1; flex: 1 0 100%; justify-content: center; }
 }
 
 /* Pantallas muy bajas (movil apaisado o con muchas barras): todo aun mas fino */
 @media (max-height: 620px) {
   .hud-timer { font-size: 16px; }
   .hud-phase, .hud-round { display: none; }
-  .unit-card { width: 54px; }
   .unit-avatar { width: 34px; height: 34px; font-size: 11px; }
-  .bench-unit { width: 38px; height: 38px; }
   .bench-unit .unit-avatar { width: 27px; height: 27px; font-size: 10px; }
-  .bench { min-height: 46px; }
-  .bench-slot { width: 38px; height: 38px; }
+  .bench { height: clamp(56px, 15vw, 74px); }
+  .shop { height: clamp(88px, 24vw, 116px); }
 }
 
 

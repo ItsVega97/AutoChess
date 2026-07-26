@@ -198,9 +198,27 @@ descargan al abrirla.
 
 ## Imágenes de los personajes
 
-El retrato que se ve en la tienda, el banquillo y la Wiki se **renderiza del
-modelo 3D** del personaje (medio cuerpo, con las luces de la cubierta) y se
-cachea. Los que todavía no tienen modelo muestran sus iniciales.
+### Cartas ilustradas (lo que se ve en la tienda)
+
+Lo que más manda: si existe `public/img/cards/<id>.webp` (o `.png`), la tienda
+usa **esa carta entera** —marco, ilustración y nombre incluidos—, el banquillo
+se queda con un recorte de la cara y la Wiki con un avatar redondo. Solo hay que
+dejar el archivo en la carpeta con el id del personaje en minúsculas
+(`luffy.webp`, `zoro.webp`…): el servidor mira la carpeta y lo manda en
+`/api/units`, sin tocar código.
+
+El número de coste que viene impreso en el dibujo es decorativo: encima se pinta
+el **coste real** del juego, en el mismo círculo dorado.
+
+Las originales sin comprimir están en `assets-src/cards/`. Antes de subir una
+carta conviene reducirla a ~320 px de ancho y pasarla a WebP (en el juego se ve
+como mucho a 110 px), que baja de ~430 KB a ~30 KB.
+
+### Retratos generados
+
+Si un personaje no tiene carta, el retrato de la tienda, el banquillo y la Wiki
+se **renderiza de su modelo 3D** (medio cuerpo, con las luces de la cubierta) y
+se cachea. Los que todavía no tienen modelo muestran sus iniciales.
 
 Si además quieres darle a alguno una imagen 2D propia, tiene prioridad sobre el
 retrato generado:
@@ -215,6 +233,23 @@ Los personajes sin retrato muestran automáticamente sus iniciales sobre el colo
 de su tripulación, así que no hace falta tenerlas las 40 para empezar. No se
 enlazan imágenes desde wikis externas: son poco fiables (se rompen al cambiar la
 URL, bloqueadas por CORS en algunas redes) y de derechos dudosos.
+
+## Marcos del banquillo y de la tienda
+
+La barra de abajo son dos ilustraciones, no CSS:
+
+- `public/img/ui/bench.webp` — el barril con la bandera pirata y los seis huecos
+  del banquillo. Los huecos se colocan por encima con los porcentajes medidos
+  sobre la propia imagen (`HUECOS_BANQUILLO` en `public/js/game.js`), así que si
+  cambias el dibujo hay que volver a medirlos.
+- `public/img/ui/shop.webp` — el tablón de madera de la tienda. Las cuatro
+  cartas se reparten dentro con `.shop-inner` (`public/css/style.css`).
+
+El barril hace también de **papelera**: al seleccionar una ficha aparece encima
+por cuánto se vende, y al tocarlo se vende.
+
+Los PNG originales (con su fondo negro sin recortar) están en `assets-src/ui/`,
+junto con la referencia de la tienda llena que se usó para calcular las medidas.
 
 ## Fichas 3D
 

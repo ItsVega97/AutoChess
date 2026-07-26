@@ -397,6 +397,9 @@ import { getThumb, getThumbSync } from './thumbs.js';
   function renderState(payload) {
     myState = payload;
     window.__estadoTest = payload; // ultimo estado recibido, para las pruebas
+    // Vuelve a pintar tienda y banquillo con el estado que haya: sirve para
+    // probar la maquetacion sin depender de lo que salga en la tienda.
+    window.__repintarTest = () => { renderShop(myState.you); renderBench(myState.you); };
     if (!enteredGame) {
       enteredGame = true;
       show('screen-game');
@@ -482,6 +485,20 @@ import { getThumb, getThumbSync } from './thumbs.js';
   }
 
   function makeAvatarEl(p) {
+    // Con carta ilustrada nos quedamos con la cara, que es lo que se reconoce
+    // en un avatar redondo pequeno (wiki, fantasma de arrastre...).
+    if (p.card) {
+      const wrap = el('div', `unit-avatar unit-avatar-img uc-cara${p.captain ? ' captain' : ''}`);
+      const img = el('img');
+      img.src = `/${p.card}`;
+      img.alt = p.name;
+      img.onerror = () => {
+        wrap.classList.remove('unit-avatar-img', 'uc-cara');
+        wrap.textContent = p.initials;
+      };
+      wrap.appendChild(img);
+      return wrap;
+    }
     if (p.portrait) {
       const wrap = el('div', `unit-avatar unit-avatar-img${p.captain ? ' captain' : ''}`);
       const img = el('img');
@@ -505,13 +522,44 @@ import { getThumb, getThumbSync } from './thumbs.js';
     return avatar;
   }
 
+  // Contenido de una tarjeta: si el personaje tiene carta ilustrada la usamos
+  // tal cual y solo pintamos encima nuestro coste (el impreso en el dibujo es
+  // el del arte, no el del juego). Si no, la tarjeta generada de siempre.
+  function fillCard(card, p, opciones = {}) {
+    if (p.card) {
+      card.classList.add('has-art');
+      const img = el('img', 'uc-art');
+      img.src = `/${p.card}`;
+      img.alt = p.name;
+      img.draggable = false;
+      img.onerror = () => {
+        card.classList.remove('has-art');
+        card.innerHTML = '';
+        rellenoGenerado(card, p, opciones);
+      };
+      card.appendChild(img);
+      if (opciones.coste) card.appendChild(el('div', 'uc-cost', p.cost));
+      return;
+    }
+    rellenoGenerado(card, p, opciones);
+  }
+
+  function rellenoGenerado(card, p, opciones) {
+    card.classList.add(`uc-crew-${p.crew}`);
+    if (opciones.coste) card.appendChild(el('div', 'uc-cost', p.cost));
+    if (p.captain) card.appendChild(el('div', 'captain-badge', '👑'));
+    card.appendChild(makeAvatarEl(p));
+    if (opciones.nombre) card.appendChild(el('div', 'uc-name', p.name));
+  }
+
   // ---------------- Tienda ----------------
   function renderShop(you) {
     const wrap = document.getElementById('shop');
     wrap.innerHTML = '';
+    const fila = el('div', 'shop-inner');
     you.shop.forEach((pid, idx) => {
       if (!pid) {
-        wrap.appendChild(el('div', 'unit-card locked', '<div class="uc-sold">vendido</div>'));
+        fila.appendChild(el('div', 'unit-card empty', '<div class="uc-sold">vendido</div>'));
         return;
       }
       const p = charDb[pid];
@@ -520,39 +568,50 @@ import { getThumb, getThumbSync } from './thumbs.js';
       // el banquillo y entra en la ronda siguiente.
       const affordable = you.gold >= p.cost && you.bench.some((s) => s === null)
         && myState.phase !== 'gameover';
-      const card = el('div', `unit-card uc-crew-${p.crew}${p.captain ? ' captain' : ''}${affordable ? '' : ' locked'}`);
-      card.appendChild(el('div', 'uc-cost', p.cost));
-      if (p.captain) card.appendChild(el('div', 'captain-badge', '👑'));
-      card.appendChild(makeAvatarEl(p));
-      card.appendChild(el('div', 'uc-name', p.name));
+      const card = el('div', `unit-card${p.captain ? ' captain' : ''}${affordable ? '' : ' locked'}`);
+      fillCard(card, p, { coste: true, nombre: true });
       card.addEventListener('click', () => {
         if (!affordable) return;
         socket.emit('buyUnit', { slot: idx });
       });
       // Sin tooltip en la tienda a proposito: al aparecer tapaba las cartas de
       // al lado y estorbaba justo cuando estas eligiendo que comprar.
-      wrap.appendChild(card);
+      fila.appendChild(card);
     });
+    wrap.appendChild(fila);
   }
 
   // ---------------- Banquillo ----------------
+  // Huecos dibujados en el barril del banquillo (public/img/ui/bench.png),
+  // medidos sobre la propia imagen y expresados en % del marco.
+  const HUECOS_BANQUILLO = [
+    [19.96, 29.23], [32.02, 41.39], [44.09, 53.45],
+    [56.15, 65.66], [68.40, 77.86], [80.51, 89.83],
+  ];
+  const HUECO_Y = [27.9, 79.9];
+
   function renderBench(you) {
     const wrap = document.getElementById('bench');
     wrap.innerHTML = '';
-    you.bench.forEach((unit) => {
-      if (!unit) {
-        wrap.appendChild(el('div', 'bench-slot'));
-        return;
-      }
+    you.bench.forEach((unit, idx) => {
+      const hueco = HUECOS_BANQUILLO[idx];
+      if (!hueco) return;
+      const slot = el('div', 'bench-slot');
+      slot.style.left = `${hueco[0]}%`;
+      slot.style.width = `${hueco[1] - hueco[0]}%`;
+      slot.style.top = `${HUECO_Y[0]}%`;
+      slot.style.height = `${HUECO_Y[1] - HUECO_Y[0]}%`;
+      wrap.appendChild(slot);
+      if (!unit) return;
       const p = charDb[unit.pokemonId];
       if (!p) return;
-      const card = el('div', `bench-unit uc-crew-${p.crew}${p.captain ? ' captain' : ''}`);
-      card.appendChild(makeAvatarEl(p));
+      const card = el('div', `bench-unit${p.captain ? ' captain' : ''}`);
+      fillCard(card, p, {});
       card.appendChild(el('div', 'stars', '⭐'.repeat(unit.star)));
       card.dataset.uid = unit.uid;
       if (selectedUnit && selectedUnit.uid === unit.uid) card.classList.add('selected');
       card.addEventListener('click', () => toggleSelect(unit.uid, 'bench'));
-      wrap.appendChild(card);
+      slot.appendChild(card);
     });
   }
 
@@ -692,11 +751,13 @@ import { getThumb, getThumbSync } from './thumbs.js';
       if (ch) {
         showInfo(unitInfoHtml(ch, unit.star));
         const precio = sellPrice(ch.cost, unit.star);
-        papelera.innerHTML = `🗑️ <b>${precio}</b>🪙`;
+        papelera.innerHTML = `<span class="sz-txt">${precio} 🪙</span>`;
+        papelera.classList.add('armada');
         papelera.title = `Vender ${ch.name} por ${precio} 🪙`;
       } else hideTooltip();
     } else {
-      papelera.innerHTML = '🗑️';
+      papelera.innerHTML = '<span class="sz-txt">Vender</span>';
+      papelera.classList.remove('armada');
       papelera.title = 'Vender la ficha seleccionada';
       hideTooltip();
     }

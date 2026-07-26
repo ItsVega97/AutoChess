@@ -37,14 +37,33 @@ function listCrewFlags() {
   return map;
 }
 
+// Cartas ilustradas de personaje. Basta con dejar <id>.png en public/img/cards/
+// (el id del personaje, en minusculas) para que la tienda y el banquillo la
+// usen en vez de la tarjeta generada.
+const CARDS_DIR = path.join(__dirname, '..', 'public', 'img', 'cards');
+let cardsCache = { at: 0, map: {} };
+function listCards() {
+  if (Date.now() - cardsCache.at < 30000) return cardsCache.map;
+  const map = {};
+  try {
+    for (const f of fs.readdirSync(CARDS_DIR)) {
+      const m = f.match(/^(.+)\.(png|webp|jpg|jpeg)$/i);
+      if (m) map[m[1].toLowerCase()] = `img/cards/${f}`;
+    }
+  } catch (e) { /* sin carpeta: se usan las tarjetas generadas */ }
+  cardsCache = { at: Date.now(), map };
+  return map;
+}
+
 app.get('/api/units', (req, res) => {
   const banderas = listCrewFlags();
   const crews = {};
   for (const [slug, def] of Object.entries(CREWS)) {
     crews[slug] = banderas[slug] ? { ...def, flag: banderas[slug] } : def;
   }
+  const cartas = listCards();
   res.json({
-    characters: CHARACTERS,
+    characters: CHARACTERS.map((c) => (cartas[c.id] ? { ...c, card: cartas[c.id] } : c)),
     crews,
     board: { cols: BOARD_COLS, rows: BOARD_ROWS, rowsPerPlayer: BOARD_ROWS / 2 },
   });
