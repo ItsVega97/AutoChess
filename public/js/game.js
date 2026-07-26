@@ -523,14 +523,14 @@ import { getThumb, getThumbSync } from './thumbs.js';
   }
 
   // Contenido de una tarjeta: si el personaje tiene carta ilustrada la usamos
-  // tal cual y solo pintamos encima nuestro coste (el impreso en el dibujo es
-  // el del arte, no el del juego). Si no, la tarjeta generada de siempre.
+  // tal cual (el dibujo ya trae marco, nombre y coste). Si no, la tarjeta
+  // generada de siempre.
   function fillCard(card, p, opciones = {}) {
     if (p.card) {
       card.classList.add('has-art');
       const img = el('img', 'uc-art');
       img.src = `/${p.card}`;
-      img.alt = p.name;
+      img.alt = `${p.name} (${p.cost} de oro)`;
       img.draggable = false;
       img.onerror = () => {
         card.classList.remove('has-art');
@@ -538,7 +538,6 @@ import { getThumb, getThumbSync } from './thumbs.js';
         rellenoGenerado(card, p, opciones);
       };
       card.appendChild(img);
-      if (opciones.coste) card.appendChild(el('div', 'uc-cost', p.cost));
       return;
     }
     rellenoGenerado(card, p, opciones);

@@ -201,18 +201,21 @@ descargan al abrirla.
 ### Cartas ilustradas (lo que se ve en la tienda)
 
 Lo que más manda: si existe `public/img/cards/<id>.webp` (o `.png`), la tienda
-usa **esa carta entera** —marco, ilustración y nombre incluidos—, el banquillo
-se queda con un recorte de la cara y la Wiki con un avatar redondo. Solo hay que
-dejar el archivo en la carpeta con el id del personaje en minúsculas
-(`luffy.webp`, `zoro.webp`…): el servidor mira la carpeta y lo manda en
-`/api/units`, sin tocar código.
+usa **esa carta entera** —marco, ilustración, nombre y coste incluidos—, el
+banquillo se queda con un recorte de la cara y la Wiki con un avatar redondo.
+Solo hay que dejar el archivo en la carpeta con el id del personaje en
+minúsculas (`luffy.webp`, `zoro.webp`…): el servidor mira la carpeta y lo manda
+en `/api/units`, sin tocar código.
 
-El número de coste que viene impreso en el dibujo es decorativo: encima se pinta
-el **coste real** del juego, en el mismo círculo dorado.
+Ojo: **el coste que se ve en la tienda es el impreso en el dibujo**, no se pinta
+nada encima. Si cambias el coste de un personaje en `server/characterData.js`
+hay que volver a exportar su carta; el color del marco también va por coste
+(1 rojo, 2 verde, 3 azul, 4 morado, 5 dorado).
 
-Las originales sin comprimir están en `assets-src/cards/`. Antes de subir una
-carta conviene reducirla a ~320 px de ancho y pasarla a WebP (en el juego se ve
-como mucho a 110 px), que baja de ~430 KB a ~30 KB.
+Las originales sin comprimir están en `assets-src/cards/` (`<id>.png` tal cual
+llegaron y `<id>-crop.png` ya recortadas y todas del mismo tamaño). Antes de
+subir una carta conviene reducirla a ~340 px de ancho y pasarla a WebP (en el
+juego se ve como mucho a 105 px), que baja de ~410 KB a ~35 KB.
 
 ### Retratos generados
 
