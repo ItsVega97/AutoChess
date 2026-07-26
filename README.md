@@ -169,6 +169,12 @@ deja el PNG en `public/img/crews/<tripulación>.png` (por ejemplo
 `/api/units`, así que no hay que tocar código; el que no tenga imagen sigue con
 su emoji. Los nombres exactos están en el README de esa carpeta.
 
+Para bajarlas de la wiki de golpe:
+
+```bash
+node tools/fetch-flags.js
+```
+
 ## Ránkings
 
 Botón en el menú → pantalla con las **partidas ganadas por cada pirata**, visible

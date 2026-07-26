@@ -28,6 +28,19 @@ subiendo de una en una.
 
 ## De dónde sacarlas
 
-En la [One Piece Wiki](https://onepiece.fandom.com/wiki/Jolly_Roger) están todas
-en la ficha de cada tripulación (busca "Jolly Roger" + el nombre de la banda).
-Descarga el PNG y renómbralo según la tabla.
+Lo más rápido, desde la raíz del proyecto:
+
+```bash
+node tools/fetch-flags.js
+```
+
+Busca cada bandera en la [One Piece Wiki en español](https://onepiece.fandom.com/es)
+con su API, la descarga aquí con el nombre correcto y te dice cuáles ha cogido.
+Si alguna falla o baja la que no es, pásale la URL a mano (clic derecho sobre la
+imagen en la wiki → "Copiar dirección de la imagen"):
+
+```bash
+node tools/fetch-flags.js beast=https://static.wikia.nocookie.net/.../bandera.png
+```
+
+También vale bajarlas a mano y renombrarlas según la tabla de arriba.
