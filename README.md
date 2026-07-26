@@ -212,10 +212,20 @@ nada encima. Si cambias el coste de un personaje en `server/characterData.js`
 hay que volver a exportar su carta; el color del marco también va por coste
 (1 rojo, 2 verde, 3 azul, 4 morado, 5 dorado).
 
+Están **las 40**, las cinco de cada tripulación.
+
 Las originales sin comprimir están en `assets-src/cards/` (`<id>.png` tal cual
-llegaron y `<id>-crop.png` ya recortadas y todas del mismo tamaño). Antes de
-subir una carta conviene reducirla a ~340 px de ancho y pasarla a WebP (en el
-juego se ve como mucho a 105 px), que baja de ~410 KB a ~35 KB.
+llegaron y `<id>-crop.png` ya recortadas). Antes de subir una carta conviene
+recortarle el fondo pegado al dibujo, meterla en 340x440 y pasarla a WebP (en
+el juego se ve como mucho a 105 px de alto), que baja de ~410 KB a ~35 KB.
+
+Nada de lienzos comunes: cada carta va a su tamaño. Las tandas vinieron con
+proporciones muy distintas (de 0,53 los Piratas de Roger a 0,74 los Mugiwara) y
+al meterlas todas en un lienzo fijo las estrechas se quedaban flotando dentro
+de la tarjeta y con el recorte de cara descuadrado. Recortadas pegadas al
+dibujo, en la tienda todas ocupan el mismo alto y cada una su ancho, y el
+encuadre de cara del banquillo y la wiki (que se mueve en % de la propia
+imagen) sale igual sea cual sea la proporción.
 
 ### Retratos generados
 
