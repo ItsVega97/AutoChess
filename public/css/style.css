@@ -78,9 +78,10 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 #screen-menu.active::before {
   content: '';
   position: absolute;
-  inset: -40px;
+  inset: -30px;
   background: url('../img/menu/harbor.webp') no-repeat center / cover;
-  filter: blur(30px) brightness(.5) saturate(.8);
+  filter: blur(24px) brightness(.62) saturate(.9);
+  transform: scale(1.18);
 }
 /* El lienzo se coloca y se escala desde game.js. Hasta entonces va oculto: el
    HTML se pinta antes de que corra el modulo (que va diferido) y si no se veia
@@ -716,12 +717,16 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   overflow: hidden;
   padding: 0;
 }
+/* Lo que sobra de pantalla se rellena con la MISMA escena a tamano cover: asi
+   el cielo de arriba y la cubierta de abajo continuan, en vez de dejar dos
+   franjas negras. Un desenfoque suave disimula el cambio de escala. */
 #screen-wiki.active::before {
   content: '';
   position: absolute;
-  inset: -40px;
+  inset: -30px;
   background: url('../img/menu/wiki.webp') no-repeat center / cover;
-  filter: blur(30px) brightness(.6) saturate(.85);
+  filter: blur(24px) brightness(.62) saturate(.9);
+  transform: scale(1.18);
 }
 .w-volver {
   position: absolute;
@@ -803,6 +808,7 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 }
 
 /* Panel de detalle */
+.w-detalle > * { max-width: 100%; }
 .w-detalle {
   position: absolute;
   left: 460px; top: 300px; width: 546px; height: 1066px;
@@ -836,22 +842,22 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   border: 3px solid #8a6427;
   color: #33200a;
 }
-.w-pergamino p { margin: 0 0 14px; font-size: 23px; font-weight: 600; line-height: 1.35; }
+.w-pergamino p { margin: 0 0 14px; font-size: 23px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .w-nivel {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 9px 12px;
   border-radius: 8px;
   background: rgba(255,246,222,.5);
   margin-bottom: 8px;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 .w-nivel:last-child { margin-bottom: 0; }
-.w-nivel-n { flex: 1 1 auto; }
-.w-nivel-b { color: #1f6b21; font-weight: 900; }
+.w-nivel-n { flex: 0 0 auto; white-space: nowrap; }
+.w-nivel-b { flex: 1 1 auto; min-width: 0; text-align: right; color: #1f6b21; font-weight: 900; overflow-wrap: anywhere; }
 .w-separador {
   margin: 20px 0 12px;
   text-align: center;
@@ -916,7 +922,7 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   font-weight: 700;
   color: #f6ead2;
 }
-.w-hab { margin-top: 9px; font-size: 21px; line-height: 1.35; color: #e7d7ba; }
+.w-hab { margin-top: 9px; font-size: 21px; line-height: 1.35; color: #e7d7ba; overflow-wrap: anywhere; }
 .w-hab-cab { display: flex; gap: 10px; align-items: baseline; }
 .w-hab-cab b { color: #7cc4ff; flex: 1 1 auto; }
 .w-hab-cab span { color: #7cc4ff; flex: 0 0 auto; }

@@ -55,7 +55,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
   // cx/cy y ancho/alto son el trozo que SI o SI tiene que verse entero.
   const LIENZOS = {
     'menu-lienzo': { w: 1024, h: 1536, cx: 537, cy: 765, ancho: 725, alto: 1420 },
-    'wiki-lienzo': { w: 1024, h: 1536, cx: 517, cy: 697, ancho: 990, alto: 1365 },
+    'wiki-lienzo': { w: 1024, h: 1536, cx: 521, cy: 697, ancho: 972, alto: 1365 },
   };
   function encajarLienzo(id) {
     const lienzo = document.getElementById(id);
