@@ -924,6 +924,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         if (u && e.mana !== undefined) u.mana = e.mana;
         if (t && e.tMana !== undefined) t.mana = e.tMana;
         if (t) t.hp = e.hp;
+        if (u) u.golpeAt = now;
         if (u && t && scene) {
           const a = battleToRender(u.x, u.y);
           const b = battleToRender(t.x, t.y);
@@ -979,7 +980,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
       }
       case 'ability': {
         const u = battleUnits.get(e.uid);
-        if (u) u.mana = 0;
+        if (u) { u.mana = 0; u.golpeAt = now; }
         if (u && scene) {
           const p = battleToRender(u.x, u.y);
           scene.addAbilityBurst(p.col, p.row);
@@ -1025,11 +1026,14 @@ import { getThumb, getThumbSync } from './thumbs.js';
         fade = Math.max(0, 1 - age / 500);
       }
       let px = u.toX, py = u.toY;
-      if (u.moveStart && now - u.moveStart < u.moveDur) {
+      const andando = u.moveStart && now - u.moveStart < u.moveDur;
+      if (andando) {
         const f = (now - u.moveStart) / u.moveDur;
         px = u.fromX + (u.toX - u.fromX) * f;
         py = u.fromY + (u.toY - u.fromY) * f;
       }
+      // El golpe manda sobre el paso: si ataca mientras se movia, se ve pegar
+      const golpeando = u.alive && u.golpeAt && now - u.golpeAt < 620;
       const ch = charDb[u.pokemonId];
       if (!ch) continue;
       const { col, row } = battleToRender(px, py);
@@ -1047,6 +1051,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         mana: u.mana,
         maxMana: u.maxMana,
         opacity: fade,
+        accion: golpeando ? 'attack' : (andando && u.alive) ? 'walk' : 'idle',
       });
     }
     if (scene) scene.syncUnits(units);

@@ -113,14 +113,19 @@ arranque `npm start` y puerto por `process.env.PORT`).
 
    | Coste | Probabilidad por hueco |
    |---|---|
-   | 1 🪙 | 40% |
-   | 2 🪙 | 26% |
-   | 3 🪙 | 18% |
-   | 4 🪙 | 11% |
-   | 5 🪙 (capitán) | 5% |
+   | 1 🪙 | 28% |
+   | 2 🪙 | 24% |
+   | 3 🪙 | 20% |
+   | 4 🪙 | 16% |
+   | 5 🪙 (capitán) | 12% |
 
-   Con 4 huecos, eso es un **18,5% de tiendas con capitán**: puedes fichar a
-   Shanks en la ronda 1 si tienes suerte y te gastas medio bolsillo en él.
+   Están **bastante igualadas a propósito**: los costes altos aparecen lo
+   bastante como para poder ir a por ellos, y los de 1 dejan de inundar la
+   tienda. Lo que de verdad frena a los capitanes es su precio, no que no
+   salgan. Con 4 huecos eso es un **40% de tiendas con capitán**.
+
+   En una misma tienda **nunca se repite personaje**: no vas a ver dos Usopp a
+   la vez. Para juntar copias hay que ir comprando en tiendas distintas.
 2. **Combate automático**: tu tripulación lucha sola contra la del rival, con la
    formación exacta en la que la colocaste. Gana quien deje unidades vivas. El
    daño va como en Tactics Royale: **1 punto por cada tropa que le sobreviva al
@@ -315,6 +320,38 @@ ve la juntura.
 Los PNG originales (con transparencia, sin recortar el margen) están en
 `assets-src/ui/`, junto con la referencia de la tienda llena y el mockup de la
 pantalla completa que se usaron para calcular las medidas.
+
+## Animaciones de los modelos
+
+Un `.glb` puede traer animaciones, y el juego usa tres: **reposo**, **andar** y
+**golpear**. Se reparten por el nombre del clip (no por el orden), buscando
+palabras sueltas: `walk`/`run`/`caminar` → andar, `punch`/`attack`/`kick`/`golpe`
+→ golpear, `idle`/`gesture`/`stand`/`reposo` → reposo. Lo que no encaje se
+queda de reposo, y un modelo con una sola animación la usa para todo. Los
+nombres que suelta Mixamo (`Walking`, `Punching Bag`, `Head Gesture`) ya caen
+donde toca.
+
+En combate cada ficha pide la suya: anda mientras se mueve de casilla, pega al
+atacar o al lanzar su habilidad y el resto del tiempo está en reposo, con una
+mezcla corta entre una y otra para que no salte de golpe. El golpe se acelera
+para que quepa entero en el tiempo que dura un ataque (~0,6 s).
+
+Dos cosas a tener en cuenta al preparar un modelo con esqueleto:
+
+- El tamaño se mide **con la animación de reposo puesta**, no con la pose que
+  trae el archivo, porque muchas vienen centradas en el origen o con los brazos
+  en cruz y la ficha salía flotando o más baja que las demás.
+- **No lo comprimas con `--compress quantize`**: al cuantizar, la escala se va a
+  las matrices de los huesos y el modelo acaba midiendo lo que no es. Para uno
+  con esqueleto:
+
+  ```bash
+  gltf-transform optimize entrada.glb salida.glb \
+    --texture-size 1024 --texture-compress webp --compress false --simplify false
+  ```
+
+  El de Luffy pasa así de 28,3 MB a 814 KB (casi todo era una textura de
+  4096x4096) conservando sus tres animaciones.
 
 ## Fichas 3D
 

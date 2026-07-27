@@ -63,6 +63,40 @@ export function fetchModelFile(char) {
 }
 
 /**
+ * Caja que ocupa el modelo tal y como se va a dibujar.
+ *
+ * Con esqueleto (SkinnedMesh) no vale mirar la geometria: los vertices que
+ * trae el archivo estan en la pose de enlace y el tamano de verdad sale de las
+ * matrices de los huesos. Y Box3.setFromObject tampoco, porque calcula la caja
+ * antes de que el esqueleto este listo, se la guarda vacia y ya no la vuelve a
+ * calcular: la escala salia 1 y la ficha se quedaba de un pixel, invisible.
+ * Asi que se actualiza el esqueleto a mano y se recalcula.
+ */
+function cajaDelModelo(raiz) {
+  const caja = new THREE.Box3();
+  const trozo = new THREE.Box3();
+  raiz.updateMatrixWorld(true);
+  raiz.traverse((o) => {
+    if (o.isSkinnedMesh) {
+      o.skeleton.update();
+      o.boundingBox = null;
+      o.computeBoundingBox();
+      if (!o.boundingBox || o.boundingBox.isEmpty()) return;
+      trozo.copy(o.boundingBox).applyMatrix4(o.matrixWorld);
+      caja.union(trozo);
+      return;
+    }
+    const geo = o.geometry;
+    if (!geo) return;
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    if (!geo.boundingBox) return;
+    trozo.copy(geo.boundingBox).applyMatrix4(o.matrixWorld);
+    caja.union(trozo);
+  });
+  return caja;
+}
+
+/**
  * Devuelve una instancia nueva del modelo, ya centrada y escalada a
  * MODEL_HEIGHT con los pies en el origen: { root, animations } o null.
  * Cada ficha necesita su propia copia (esqueletos y animaciones no se pueden
@@ -77,12 +111,33 @@ export function instantiateModel(char) {
         '',
         (gltf) => {
           const raiz = gltf.scene;
-          const caja = new THREE.Box3().setFromObject(raiz);
+          // Se mide con la animacion de reposo puesta, que es la pose en la que
+          // se va a ver: la pose de enlace que trae el archivo puede estar
+          // centrada en el origen o con los brazos en cruz, y entonces la ficha
+          // sale flotando o mas baja de la cuenta.
+          const clips = pickClips(gltf.animations || []);
+          let mezclador = null;
+          if (clips.idle) {
+            mezclador = new THREE.AnimationMixer(raiz);
+            mezclador.clipAction(clips.idle).play();
+            mezclador.update(0);
+          }
+          const caja = cajaDelModelo(raiz);
+          if (mezclador) {
+            mezclador.stopAllAction();
+            mezclador.uncacheRoot(raiz);
+          }
           const tam = caja.getSize(new THREE.Vector3());
           const centro = caja.getCenter(new THREE.Vector3());
-          const escala = tam.y > 0.0001 ? MODEL_HEIGHT / tam.y : 1;
+          // hay modelos que vienen a escala de centimetros: no se descarta por pequeno
+          const escala = tam.y > 1e-6 ? MODEL_HEIGHT / tam.y : 1;
           raiz.scale.setScalar(escala);
           raiz.position.set(-centro.x * escala, -caja.min.y * escala, -centro.z * escala);
+
+          // Al animarse, un modelo con esqueleto se sale de la caja que tenia
+          // en reposo; si se deja el recorte por camara puede desaparecer justo
+          // al golpear. Son pocas fichas en pantalla, no compensa afinarlo.
+          raiz.traverse((o) => { if (o.isSkinnedMesh) o.frustumCulled = false; });
 
           const envoltorio = new THREE.Group();
           envoltorio.add(raiz);
@@ -117,6 +172,32 @@ export function preloadModels() {
     };
     siguiente();
   });
+}
+
+/**
+ * Reparte las animaciones que trae un .glb en las tres que usa el juego.
+ * Los nombres los pone quien exporta el modelo (Mixamo suele mandar cosas como
+ * "Walking" o "Punching Bag"), asi que se buscan por palabras clave y no por
+ * posicion. Lo que no encaje se queda como reposo, y si solo hay una animacion
+ * esa vale para todo.
+ */
+const PISTAS = {
+  walk: /walk|run|caminar|andar|correr|march/i,
+  attack: /punch|attack|hit|kick|slash|strike|combat|golpe|ataque|patada/i,
+  idle: /idle|gesture|breath|stand|reposo|descans|espera/i,
+};
+export function pickClips(animations) {
+  const clips = { idle: null, walk: null, attack: null };
+  const sobran = [];
+  for (const clip of animations || []) {
+    const nombre = clip.name || '';
+    const donde = Object.keys(PISTAS).find((k) => !clips[k] && PISTAS[k].test(nombre));
+    if (donde) clips[donde] = clip;
+    else sobran.push(clip);
+  }
+  // sin reposo reconocible, se usa lo que haya sobrado (o cualquiera)
+  if (!clips.idle) clips.idle = sobran.shift() || clips.walk || clips.attack || null;
+  return clips;
 }
 
 export function warmModels(chars) {

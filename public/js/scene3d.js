@@ -20,7 +20,7 @@
  */
 
 import * as THREE from '../vendor/three.module.min.js';
-import { instantiateModel, preloadModels, warmModels, MODEL_HEIGHT } from './models.js';
+import { instantiateModel, preloadModels, warmModels, pickClips, MODEL_HEIGHT } from './models.js';
 
 // La ilustracion y las 4 esquinas de su rejilla 5x6, en pixeles de la imagen
 // original. Si se cambia el dibujo hay que volver a medirlas.
@@ -302,11 +302,43 @@ export function createScene(container) {
     }
     if (res.animations.length) {
       const mixer = new THREE.AnimationMixer(res.root);
-      mixer.clipAction(res.animations[0]).play();
+      const clips = pickClips(res.animations);
+      tok.acciones = {};
+      for (const nombre of Object.keys(clips)) {
+        const clip = clips[nombre];
+        if (!clip) continue;
+        const accion = mixer.clipAction(clip);
+        // El golpe suele venir mucho mas largo de lo que dura un ataque en el
+        // juego (~1s), asi que se acelera para que se vea entero.
+        if (nombre === 'attack' && clip.duration > DUR_GOLPE) {
+          accion.timeScale = clip.duration / DUR_GOLPE;
+        }
+        tok.acciones[nombre] = accion;
+      }
+      tok.accionActual = null;
+      tok.accionNombre = null;
       tok.mixer = mixer;
       mixers.add(mixer);
+      ponerAccion(tok, tok.accionPedida || 'idle');
     }
     colocarToken(tok);
+  }
+
+  // Cambia de animacion con una mezcla corta, para que no salte de golpe
+  const DUR_GOLPE = 0.62; // segundos que dura el golpe una vez acelerado
+  function ponerAccion(tok, nombre) {
+    tok.accionPedida = nombre;
+    if (!tok.acciones) return;
+    const nueva = tok.acciones[nombre] || tok.acciones.idle;
+    if (!nueva || tok.accionActual === nueva) return;
+    const vieja = tok.accionActual;
+    nueva.reset();
+    nueva.enabled = true;
+    nueva.setEffectiveWeight(1);
+    nueva.play();
+    if (vieja) nueva.crossFadeFrom(vieja, nombre === 'attack' ? 0.08 : 0.18, false);
+    tok.accionActual = nueva;
+    tok.accionNombre = nombre;
   }
 
   function releaseModel(tok) {
@@ -315,6 +347,9 @@ export function createScene(container) {
       mixers.delete(tok.mixer);
       tok.mixer = null;
     }
+    tok.acciones = null;
+    tok.accionActual = null;
+    tok.accionNombre = null;
     if (tok.instancia) {
       tok.pivote.remove(tok.instancia.root);
       returnToPool(tok.char, tok.instancia);
@@ -438,6 +473,7 @@ export function createScene(container) {
       group, pivote, panel, panelMat, sombra,
       hpBack, hpFill, manaBack, manaFill,
       star: char.star || 1, modelo: null, mixer: null, badge: null, instancia: null,
+      acciones: null, accionActual: null, accionNombre: null, accionPedida: 'idle',
       col: 0, row: 0, facing: 0, selected: false, fade: 1,
     };
     attachModel(tok, char);
@@ -482,6 +518,8 @@ export function createScene(container) {
       // se giran media vuelta para encarar el fondo.
       tok.facing = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
       if (tok.modelo) tok.modelo.rotation.y = tok.facing;
+      // reposo / andando / golpeando, segun lo que este haciendo en el combate
+      ponerAccion(tok, u.accion || 'idle');
       colocarToken(tok);
       tok.group.visible = true;
 
