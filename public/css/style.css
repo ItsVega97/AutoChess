@@ -82,15 +82,21 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   background: url('../img/menu/harbor.webp') no-repeat center / cover;
   filter: blur(30px) brightness(.5) saturate(.8);
 }
-.menu-lienzo {
+/* El lienzo se coloca y se escala desde game.js. Hasta entonces va oculto: el
+   HTML se pinta antes de que corra el modulo (que va diferido) y si no se veia
+   un fogonazo del dibujo a tamano real, como un zoom al entrar. */
+.lienzo {
   position: absolute;
   top: 0; left: 0;
   width: 1024px;
   height: 1536px;
   transform-origin: 0 0;
-  background: url('../img/menu/harbor.webp') no-repeat 0 0 / 1024px 1536px;
+  visibility: hidden;
   box-shadow: 0 0 80px rgba(0,0,0,.55);
 }
+.lienzo.encajado { visibility: visible; }
+.menu-lienzo { background: url('../img/menu/harbor.webp') no-repeat 0 0 / 1024px 1536px; }
+.wiki-lienzo { background: url('../img/menu/wiki.webp') no-repeat 0 0 / 1024px 1536px; }
 
 /* Zonas tocables encima de los botones pintados */
 .m-zona {
@@ -217,8 +223,8 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   justify-content: center;
   padding: 24px 16px;
 }
-/* La Wiki y los rankings son sus propias pantallas y si necesitan scroll */
-#screen-wiki.active, #screen-rankings.active {
+/* Los rankings son su propia pantalla y si necesitan scroll */
+#screen-rankings.active {
   display: flex;
   justify-content: center;
   padding: 20px 16px 40px;
@@ -697,69 +703,224 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .ts-name { max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ts-hp { color: var(--hp); }
 
-/* ---------- Wiki Pirata (pantalla de inicio) ---------- */
-.wiki { width: 100%; max-width: 560px; }
-.wiki-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.wiki-head .btn { margin: 0; flex: 0 0 auto; }
-.wiki-title { font-size: 20px; margin: 0; flex: 1 1 auto; text-align: center; }
-/* el boton de volver descuadra el centrado: compensamos con un hueco */
-.wiki-head::after { content: ''; flex: 0 0 74px; }
-.wiki-sub { font-size: 12px; opacity: .75; text-align: center; margin: 0 0 14px; }
-.wiki-crews { display: flex; flex-direction: column; gap: 8px; }
-
-.wiki-crew {
-  background: rgba(12, 30, 58, .78);
-  border: 2px solid rgba(255,255,255,.13);
+/* ---------- Wiki Pirata ----------
+   La pantalla es la ilustracion; encima van las dos columnas de verdad, con un
+   fondo opaco que tapa las filas y las fichas que trae pintadas. Todo va en
+   pixeles del dibujo (1024x1536), como en el inicio. */
+#screen-wiki.active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  height: min(var(--app-height, 100svh), 100svh);
+  overflow: hidden;
+  padding: 0;
+}
+#screen-wiki.active::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  background: url('../img/menu/wiki.webp') no-repeat center / cover;
+  filter: blur(30px) brightness(.6) saturate(.85);
+}
+.w-volver {
+  position: absolute;
+  left: 35px; top: 163px; width: 180px; height: 54px;
+  border: 0; padding: 0;
+  background: transparent;
   border-radius: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.w-volver::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: #fff; opacity: 0;
+  transition: opacity .12s ease;
+}
+.w-volver:hover::after { opacity: .14; }
+.w-volver:active::after { opacity: .26; }
+.w-volver:focus-visible { outline: 4px solid var(--gold); outline-offset: 3px; }
+
+/* Columna de tripulaciones */
+.w-lista {
+  position: absolute;
+  left: 46px; top: 302px; width: 382px; height: 942px;
+  padding: 14px 8px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 35px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #1d180e;
+  border-radius: 10px;
+}
+.w-fila {
+  flex: 0 0 auto;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  border: 3px solid #916227;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #5d340f 0%, #4a2709 55%, #3a1e06 100%);
+  box-shadow: inset 0 3px 0 rgba(255,205,130,.18), 0 4px 8px rgba(0,0,0,.45);
+  color: #fdf2dc;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 26px;
+  text-align: left;
+  text-shadow: 0 2px 3px rgba(0,0,0,.75);
+  cursor: pointer;
+}
+.w-fila.activa {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 3px rgba(255,210,63,.45), 0 0 22px rgba(255,210,63,.5);
+  background: linear-gradient(180deg, #7a4713 0%, #5d340f 55%, #46250a 100%);
+}
+.w-emblema {
+  flex: 0 0 auto;
+  width: 64px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2b1c0c, #0d0803);
+  border: 3px solid #c9922f;
   overflow: hidden;
 }
-.wiki-crew-head {
-  width: 100%;
+.w-emblema img { width: 100%; height: 100%; object-fit: contain; }
+.w-fila-nombre { flex: 1 1 auto; min-width: 0; line-height: 1.15; }
+.w-flecha {
+  flex: 0 0 auto;
+  width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #8a5a20, #4d2c0b);
+  border: 3px solid #c9922f;
+}
+
+/* Panel de detalle */
+.w-detalle {
+  position: absolute;
+  left: 460px; top: 300px; width: 546px; height: 1066px;
+  padding: 16px 18px 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #241706;
+  border-radius: 12px;
+}
+.w-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #e8cd97, #cba764);
+  border: 3px solid #8a6427;
+  color: #33200a;
+  font-weight: 900;
+  font-size: 29px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.w-titulo .w-emblema { width: 52px; height: 52px; font-size: 28px; }
+.w-pergamino {
+  padding: 18px 20px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ddb87a, #c79f5d);
+  border: 3px solid #8a6427;
+  color: #33200a;
+}
+.w-pergamino p { margin: 0 0 14px; font-size: 23px; font-weight: 600; line-height: 1.35; }
+.w-nivel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(255,246,222,.5);
+  margin-bottom: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.w-nivel:last-child { margin-bottom: 0; }
+.w-nivel-n { flex: 1 1 auto; }
+.w-nivel-b { color: #1f6b21; font-weight: 900; }
+.w-separador {
+  margin: 20px 0 12px;
+  text-align: center;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #f0d6a2;
+  text-shadow: 0 2px 4px rgba(0,0,0,.8);
+}
+.w-miembro {
+  display: flex;
+  gap: 14px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 3px solid #7d551f;
+  background: linear-gradient(180deg, #4a2f11, #2f1c07);
+  box-shadow: 0 4px 10px rgba(0,0,0,.45);
+}
+.w-miembro.captain { border-color: var(--gold); }
+.w-retrato {
+  flex: 0 0 auto;
+  width: 132px; height: 172px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 3px solid #8a6427;
+  background: #1a0f08;
+}
+.w-retrato .unit-avatar {
+  width: 100%; height: 100%;
+  border-radius: 0;
+  border: 0;
+  font-size: 40px;
+}
+.w-datos { flex: 1 1 auto; min-width: 0; }
+.w-nombre {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  background: none;
-  border: none;
-  color: inherit;
-  font: inherit;
-  font-weight: 800;
-  font-size: 15px;
-  text-align: left;
+  font-size: 29px;
+  font-weight: 900;
+  color: #fff6e2;
+  text-shadow: 0 2px 3px rgba(0,0,0,.8);
 }
-.wiki-crew-head .wc-icon { font-size: 19px; }
-.wiki-crew-head .wc-name { flex: 1 1 auto; }
-.wiki-crew-head .wc-open { opacity: .6; transition: transform .18s ease; }
-.wiki-crew.open .wc-open { transform: rotate(180deg); }
-
-.wiki-crew-body { display: none; padding: 0 14px 14px; }
-.wiki-crew.open .wiki-crew-body { display: block; }
-.wiki-desc { font-size: 12px; opacity: .8; margin: 0 0 10px; }
-.wiki-tiers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-
-.wiki-members { display: flex; flex-direction: column; gap: 8px; }
-.wiki-card {
-  background: rgba(8, 20, 40, .7);
-  border: 1px solid rgba(255,255,255,.12);
-  border-left: 4px solid var(--crew, rgba(255,255,255,.3));
-  border-radius: 12px;
-  padding: 10px 12px;
+.w-nombre span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-coste {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 23px;
+  color: var(--gold);
 }
-.wiki-card.captain { border-color: rgba(255,210,63,.55); border-left-color: var(--gold); }
-.wiki-card-head { display: flex; align-items: center; gap: 10px; }
-.wiki-card-head .unit-avatar { width: 52px; height: 52px; font-size: 15px; flex: 0 0 auto; }
-.wiki-card-title { flex: 1 1 auto; min-width: 0; }
-.wiki-card-name { font-weight: 800; font-size: 14px; }
-.wiki-card-cost { font-size: 12px; opacity: .8; }
-.wiki-card-stats { font-size: 12px; opacity: .85; margin-top: 8px; }
-.wiki-card-ability { margin-top: 8px; font-size: 12px; line-height: 1.45; }
-.wiki-card-ability b { color: #9fd4ff; }
-.wiki-card-desc { opacity: .85; margin-top: 2px; }
-
-@media (max-width: 720px) {
-  .wiki-title { font-size: 18px; }
-  .wiki-card-head .unit-avatar { width: 46px; height: 46px; }
+.w-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.35);
+  font-size: 22px;
+  font-weight: 700;
+  color: #f6ead2;
 }
+.w-hab { margin-top: 9px; font-size: 21px; line-height: 1.35; color: #e7d7ba; }
+.w-hab-cab { display: flex; gap: 10px; align-items: baseline; }
+.w-hab-cab b { color: #7cc4ff; flex: 1 1 auto; }
+.w-hab-cab span { color: #7cc4ff; flex: 0 0 auto; }
+.w-hab-desc { margin-top: 3px; }
 
 
 /* ---------- Ránkings ---------- */

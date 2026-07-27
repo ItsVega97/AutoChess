@@ -47,37 +47,44 @@ import { getThumb, getThumbSync } from './thumbs.js';
     if (!tooltipHidden()) placeInfoPanel();
   }
 
-  // ---------------- Encaje de la pantalla de inicio ----------------
-  // El menu es la ilustracion del puerto con los controles puestos encima de
-  // los botones pintados, todo en pixeles del dibujo. Aqui solo se decide a
-  // que tamano y en que sitio se ve: se llena la pantalla, pero sin pasarse de
-  // lo que dejaria fuera el titulo o el ultimo boton.
-  const MENU_ARTE = {
-    w: 1024, h: 1536,      // tamano del dibujo
-    cx: 537, cy: 765,      // centro de lo que hay que ver (titulo + botones)
-    ancho: 725, alto: 1420, // y su tamano
+  // ---------------- Encaje de las pantallas ilustradas ----------------
+  // El inicio y la wiki son una ilustracion con los controles de verdad puestos
+  // encima, todo en pixeles del dibujo. Aqui solo se decide a que tamano y en
+  // que sitio se ve: se llena la pantalla, pero sin pasarse de lo que dejaria
+  // fuera el titulo o el ultimo boton.
+  // cx/cy y ancho/alto son el trozo que SI o SI tiene que verse entero.
+  const LIENZOS = {
+    'menu-lienzo': { w: 1024, h: 1536, cx: 537, cy: 765, ancho: 725, alto: 1420 },
+    'wiki-lienzo': { w: 1024, h: 1536, cx: 517, cy: 697, ancho: 990, alto: 1365 },
   };
-  function encajarMenu() {
-    const lienzo = document.getElementById('menu-lienzo');
-    if (!lienzo) return;
+  function encajarLienzo(id) {
+    const lienzo = document.getElementById(id);
+    const arte = LIENZOS[id];
+    if (!lienzo || !arte) return;
     const w = window.innerWidth;
     const medidas = [window.innerHeight, document.documentElement.clientHeight];
     if (window.visualViewport) medidas.push(window.visualViewport.height);
     const h = Math.min(...medidas.filter((n) => n > 0));
 
     const escala = Math.min(
-      Math.max(w / MENU_ARTE.w, h / MENU_ARTE.h),
-      w / MENU_ARTE.ancho,
-      h / MENU_ARTE.alto,
+      Math.max(w / arte.w, h / arte.h),
+      w / arte.ancho,
+      h / arte.alto,
     );
-    const dw = MENU_ARTE.w * escala;
-    const dh = MENU_ARTE.h * escala;
-    let ox = w / 2 - MENU_ARTE.cx * escala;
-    let oy = h / 2 - MENU_ARTE.cy * escala;
+    const dw = arte.w * escala;
+    const dh = arte.h * escala;
+    let ox = w / 2 - arte.cx * escala;
+    let oy = h / 2 - arte.cy * escala;
     // si el dibujo da de sobra, que no asome el fondo por los bordes
     if (dw > w) ox = Math.min(0, Math.max(w - dw, ox));
     if (dh > h) oy = Math.min(0, Math.max(h - dh, oy));
     lienzo.style.transform = `translate(${Math.round(ox)}px, ${Math.round(oy)}px) scale(${escala})`;
+    // hasta aqui el lienzo esta oculto: el HTML se pinta antes de que corra
+    // este modulo (va diferido) y si no se veia un fogonazo a tamano real
+    lienzo.classList.add('encajado');
+  }
+  function encajarMenu() {
+    for (const id of Object.keys(LIENZOS)) encajarLienzo(id);
   }
 
   // Le dice a la escena cuanto ocupan el HUD y la barra inferior para que
@@ -226,68 +233,82 @@ import { getThumb, getThumbSync } from './thumbs.js';
       });
   }
 
-  // ---------------- Wiki Pirata (pantalla de inicio) ----------------
-  // Una fila por tripulacion; al abrirla se ven sus niveles de combo y la ficha
-  // de sus cinco personajes, con su retrato y su habilidad.
+  // ---------------- Wiki Pirata ----------------
+  // Dos columnas, como en la ilustracion: la lista de tripulaciones a la
+  // izquierda y, al tocar una, su combo y sus cinco fichas a la derecha.
+  let wikiElegida = null;
+
   function renderWiki() {
-    const wrap = document.getElementById('wiki-crews');
-    if (!wrap) return;
+    const lista = document.getElementById('wiki-crews');
+    if (!lista) return;
+    lista.innerHTML = '';
+    const slugs = Object.keys(crewDb);
+    for (const slug of slugs) {
+      const def = crewDb[slug];
+      const fila = el('button', 'w-fila');
+      fila.appendChild(el('span', 'w-emblema', crewIcon(slug)));
+      fila.appendChild(el('span', 'w-fila-nombre', def.label));
+      fila.appendChild(el('span', 'w-flecha', '▾'));
+      fila.dataset.crew = slug;
+      fila.addEventListener('click', () => pintarDetalleWiki(slug));
+      lista.appendChild(fila);
+    }
+    pintarDetalleWiki(wikiElegida && crewDb[wikiElegida] ? wikiElegida : slugs[0]);
+  }
+
+  function pintarDetalleWiki(slug) {
+    const def = crewDb[slug];
+    const wrap = document.getElementById('wiki-detalle');
+    if (!def || !wrap) return;
+    wikiElegida = slug;
+    document.querySelectorAll('.w-fila').forEach((f) => {
+      f.classList.toggle('activa', f.dataset.crew === slug);
+    });
+
     wrap.innerHTML = '';
-    for (const [slug, def] of Object.entries(crewDb)) {
-      const bloque = el('div', 'wiki-crew');
+    wrap.scrollTop = 0;
 
-      const cabecera = el('button', 'wiki-crew-head');
-      cabecera.innerHTML = `<span class="wc-icon">${crewIcon(slug)}</span>
-        <span class="wc-name">${def.label}</span>
-        <span class="wc-open">▾</span>`;
-      bloque.appendChild(cabecera);
+    const titulo = el('div', 'w-titulo');
+    titulo.appendChild(el('span', 'w-emblema', crewIcon(slug)));
+    titulo.appendChild(el('span', '', def.label));
+    wrap.appendChild(titulo);
 
-      const cuerpo = el('div', 'wiki-crew-body');
-      bloque.appendChild(cuerpo);
+    const pergamino = el('div', 'w-pergamino');
+    pergamino.appendChild(el('p', '', def.desc || ''));
+    for (const t of def.tiers || []) {
+      const nivel = el('div', 'w-nivel');
+      nivel.appendChild(el('span', 'w-nivel-n', `👥 ${t.n} miembros`));
+      nivel.appendChild(el('span', 'w-nivel-b', t.text));
+      pergamino.appendChild(nivel);
+    }
+    wrap.appendChild(pergamino);
 
-      // El contenido se monta la primera vez que se abre: los retratos salen de
-      // los modelos 3D y no tiene sentido descargar los 40 al abrir la pagina.
-      let montado = false;
-      const montar = () => {
-        if (montado) return;
-        montado = true;
-        cuerpo.appendChild(el('p', 'wiki-desc', def.desc || ''));
+    wrap.appendChild(el('div', 'w-separador', '· Miembros de la tripulación ·'));
 
-        const niveles = el('div', 'wiki-tiers');
-        for (const t of def.tiers || []) {
-          niveles.appendChild(el('div', 'tt-tier', `<b>${t.n}</b> <span>${t.text}</span>`));
-        }
-        cuerpo.appendChild(niveles);
+    for (const m of def.members || []) {
+      const p = charDb[m.id];
+      if (!p) continue;
+      const ficha = el('div', `w-miembro${p.captain ? ' captain' : ''}`);
+      const retrato = el('div', 'w-retrato');
+      retrato.appendChild(makeAvatarEl(p));
+      ficha.appendChild(retrato);
 
-        const fichas = el('div', 'wiki-members');
-        for (const m of def.members || []) {
-          const p = charDb[m.id];
-          if (!p) continue;
-          const ficha = el('div', `wiki-card uc-crew-${slug}${p.captain ? ' captain' : ''}`);
-          const cabeza = el('div', 'wiki-card-head');
-          cabeza.appendChild(makeAvatarEl(p));
-          const titulo = el('div', 'wiki-card-title');
-          titulo.appendChild(el('div', 'wiki-card-name', `${p.captain ? '👑 ' : ''}${p.name}`));
-          titulo.appendChild(el('div', 'wiki-card-cost', `${p.cost} 🪙`));
-          cabeza.appendChild(titulo);
-          ficha.appendChild(cabeza);
-          ficha.appendChild(el('div', 'wiki-card-stats',
-            `❤️ ${p.hp} &nbsp; ⚔️ ${p.atk} &nbsp; 🛡️ ${p.def} &nbsp; 🎯 ${p.range}`));
-          if (p.ability) {
-            ficha.appendChild(el('div', 'wiki-card-ability',
-              `<b>⚡ ${p.ability.name}</b> <span class="tt-mana">${p.ability.mana} maná</span>
-               <div class="wiki-card-desc">${p.ability.desc}</div>`));
-          }
-          fichas.appendChild(ficha);
-        }
-        cuerpo.appendChild(fichas);
-      };
-
-      cabecera.addEventListener('click', () => {
-        montar();
-        bloque.classList.toggle('open');
-      });
-      wrap.appendChild(bloque);
+      const datos = el('div', 'w-datos');
+      const nombre = el('div', 'w-nombre');
+      nombre.appendChild(el('span', '', `${p.captain ? '👑 ' : ''}${p.name}`));
+      nombre.appendChild(el('span', 'w-coste', `🪙 ${p.cost}`));
+      datos.appendChild(nombre);
+      datos.appendChild(el('div', 'w-stats',
+        `<span>❤️ ${p.hp}</span><span>⚔️ ${p.atk}</span><span>🛡️ ${p.def}</span><span>🎯 ${p.range}</span>`));
+      if (p.ability) {
+        const hab = el('div', 'w-hab');
+        hab.appendChild(el('div', 'w-hab-cab',
+          `<b>⚡ ${p.ability.name}</b><span>${p.ability.mana} maná</span>`));
+        hab.appendChild(el('div', 'w-hab-desc', p.ability.desc));
+        datos.appendChild(hab);
+      }
+      ficha.appendChild(datos);
+      wrap.appendChild(ficha);
     }
   }
 

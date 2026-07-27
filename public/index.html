@@ -14,7 +14,7 @@
      pintados en ella, y encima van los controles de verdad, colocados en
      pixeles del dibujo (1024x1536). game.js escala el conjunto a la pantalla. -->
 <section id="screen-menu" class="screen active">
-  <div class="menu-lienzo" id="menu-lienzo">
+  <div class="lienzo menu-lienzo" id="menu-lienzo">
     <div class="m-nombre">
       <span class="m-calavera">☠</span>
       <input id="input-name" maxlength="16" placeholder="Tu nombre" />
@@ -49,15 +49,14 @@
   </div>
 </section>
 
-<!-- ================= WIKI PIRATA ================= -->
+<!-- ================= WIKI PIRATA =================
+     Misma idea que el inicio: la ilustracion manda y encima van las dos
+     columnas de verdad, colocadas sobre los paneles pintados. -->
 <section id="screen-wiki" class="screen">
-  <div class="wiki">
-    <div class="wiki-head">
-      <button id="btn-wiki-back" class="btn btn-ghost btn-small">← Volver</button>
-      <h2 class="wiki-title">📖 Wiki Pirata</h2>
-    </div>
-    <p class="wiki-sub">Toca una tripulación para ver su combo y sus cinco fichas.</p>
-    <div id="wiki-crews" class="wiki-crews"></div>
+  <div class="lienzo wiki-lienzo" id="wiki-lienzo">
+    <button id="btn-wiki-back" class="w-volver" aria-label="Volver"></button>
+    <div class="w-lista" id="wiki-crews"></div>
+    <div class="w-detalle" id="wiki-detalle"></div>
   </div>
 </section>
 

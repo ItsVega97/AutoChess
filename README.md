@@ -199,11 +199,19 @@ persistente (planes de pago) o una base de datos externa.
 
 ## Wiki Pirata
 
-La pantalla de inicio lleva debajo una **Wiki Pirata**: una fila por tripulación
-que, al abrirla, muestra su combo con los tres niveles y la ficha de sus cinco
-personajes — retrato, coste, estadísticas y habilidad. Los retratos se generan
-del propio modelo 3D del personaje, y los modelos de una tripulación solo se
-descargan al abrirla.
+Botón en el menú → pantalla propia, montada igual que el inicio: la ilustración
+`public/img/menu/wiki.webp` manda, y encima van las dos columnas de verdad
+colocadas sobre los paneles pintados (en píxeles del dibujo, 1024x1536).
+
+- A la izquierda, una fila por tripulación; la elegida lleva aro dorado.
+- A la derecha, el combo con sus tres niveles y la ficha de los cinco
+  personajes: retrato, coste, estadísticas y habilidad. Las dos columnas tienen
+  scroll propio.
+- Las columnas van sobre un fondo opaco que tapa las filas y las fichas que la
+  imagen trae pintadas, así que el contenido real puede ser el que sea.
+
+Los retratos salen de la carta ilustrada del personaje si la tiene; si no, del
+propio modelo 3D.
 
 ## Imágenes de los personajes
 
@@ -278,7 +286,10 @@ o el último botón; lo que sobra a los lados se rellena con la propia imagen
 desenfocada. Comprobado de 360x520 a 1280x800.
 
 Si cambias el dibujo hay que volver a medir las cajas (están en el bloque
-«Menu» de `public/css/style.css`, en píxeles de la imagen).
+«Menu» de `public/css/style.css`, en píxeles de la imagen). El lienzo arranca
+oculto y `game.js` lo destapa al colocarlo: el HTML se pinta antes de que corra
+el módulo (va diferido) y si no se veía un fogonazo del dibujo a tamaño real,
+como un zoom al entrar.
 
 ## Marcos del banquillo y de la tienda
 
