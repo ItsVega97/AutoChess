@@ -181,22 +181,30 @@ export function preloadModels() {
  * posicion. Lo que no encaje se queda como reposo, y si solo hay una animacion
  * esa vale para todo.
  */
-const PISTAS = {
-  walk: /walk|run|caminar|andar|correr|march/i,
-  attack: /punch|attack|hit|kick|slash|strike|combat|golpe|ataque|patada/i,
-  idle: /idle|gesture|breath|stand|reposo|descans|espera/i,
-};
+// Ojo con el orden: "Standing Run Forward" es andar aunque empiece por
+// "Standing", asi que andar y golpear se miran antes que el reposo.
+const PISTAS = [
+  ['walk', /walk|run|caminar|andar|correr|march/i],
+  ['attack', /punch|attack|hit|kick|slash|strike|combat|combo|sword|swing|melee|shoot|cast|golpe|ataque|patada|espada|corte/i],
+  ['idle', /idle|gesture|breath|stand|reposo|descans|espera/i],
+];
 export function pickClips(animations) {
   const clips = { idle: null, walk: null, attack: null };
   const sobran = [];
   for (const clip of animations || []) {
     const nombre = clip.name || '';
-    const donde = Object.keys(PISTAS).find((k) => !clips[k] && PISTAS[k].test(nombre));
-    if (donde) clips[donde] = clip;
+    const par = PISTAS.find(([k, re]) => !clips[k] && re.test(nombre));
+    if (par) clips[par[0]] = clip;
     else sobran.push(clip);
   }
-  // sin reposo reconocible, se usa lo que haya sobrado (o cualquiera)
-  if (!clips.idle) clips.idle = sobran.shift() || clips.walk || clips.attack || null;
+  // Lo que no se ha reconocido se reparte por los huecos que queden: un modelo
+  // con tres animaciones casi siempre trae reposo, andar y golpe, aunque las
+  // llame de cualquier manera.
+  for (const hueco of ['attack', 'walk', 'idle']) {
+    if (!clips[hueco] && sobran.length) clips[hueco] = sobran.shift();
+  }
+  // y si aun falta alguna, se tira de las que haya
+  if (!clips.idle) clips.idle = clips.walk || clips.attack || null;
   return clips;
 }
 

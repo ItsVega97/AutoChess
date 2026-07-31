@@ -350,8 +350,14 @@ Dos cosas a tener en cuenta al preparar un modelo con esqueleto:
     --texture-size 1024 --texture-compress webp --compress false --simplify false
   ```
 
-  El de Luffy pasa así de 28,3 MB a 814 KB (casi todo era una textura de
-  4096x4096) conservando sus tres animaciones.
+  Con eso, Luffy pasa de 28,3 MB a 814 KB, Sanji de 21,0 MB a 851 KB y Roger
+  de 12,9 MB a 951 KB, conservando sus tres animaciones cada uno. Casi todo el
+  peso eran las texturas (4096x4096 en dos de ellos).
+
+Van animados **Luffy** (`Walking` / `Punching Bag` / `Head Gesture`), **Sanji**
+(`Standing Idle` / `Standing Run Forward` / `Roundhouse Kick`) y **Gol D. Roger**
+(`Walking` / `Happy Idle` / `One Hand Sword Combo`). Los que no traen
+animaciones se quedan quietos, sin más.
 
 ## Fichas 3D
 
