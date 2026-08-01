@@ -190,17 +190,61 @@ Para bajarlas de la wiki de golpe:
 node tools/fetch-flags.js
 ```
 
+## Cuentas e inicio de sesión
+
+Al entrar a la web lo primero es la pantalla `public/img/menu/login.webp`, con
+dos caminos:
+
+- **Iniciar sesión con Google.** El botón azul está pintado en la ilustración y
+  encima va el botón de verdad de Google, estirado hasta cubrirlo y
+  transparente: se toca el dibujo y se abre el login de siempre.
+- **Entrar sin cuenta.** Se juega igual, pero la partida no suma puntos ni sale
+  en la tabla; el nombre lo escribes tú en el menú.
+
+**La primera vez** que entras con Google el juego te lleva a la ficha de pirata:
+un nombre (2 a 16 letras, no se puede repetir) y una cara, elegida entre las
+cartas de los 40 personajes. A partir de ahí el menú muestra tu nombre y tu cara,
+y aparece «Cerrar sesión» debajo del letrero.
+
+### Configurar el login (hace falta una vez)
+
+Sin `GOOGLE_CLIENT_ID` el servidor no monta el login: la pantalla lo dice y deja
+entrar sin cuenta, así que el juego nunca se queda bloqueado. Para activarlo:
+
+1. En [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   → *Crear credenciales* → *ID de cliente de OAuth* → tipo **Aplicación web**.
+2. En **Orígenes de JavaScript autorizados** añade la URL de la web
+   (`https://tu-servicio.onrender.com`) y, si vas a probar en local,
+   `http://localhost:3000`.
+3. Copia el *Client ID* y ponlo como variable de entorno `GOOGLE_CLIENT_ID`
+   (en Render: *Environment* → *Add Environment Variable*).
+
+El servidor comprueba la firma del token contra las claves públicas de Google y
+que sea para esa aplicación; no hay ninguna dependencia extra ni secreto de
+cliente. La sesión que devuelve vive en memoria (30 días), así que al reiniciar
+el servidor hay que volver a entrar, pero la cuenta y los puntos siguen ahí.
+
 ## Ránkings
 
-Botón en el menú → pantalla con las **partidas ganadas por cada pirata**, visible
-para todo el mundo. Se apunta al terminar cada partida (los bots no cuentan) y la
-identidad es el nombre con el que juegas: no hay cuentas, así que dos personas
-con el mismo nombre comparten fila.
+Botón en el menú → la ilustración `public/img/menu/rankings.webp`, con las
+divisiones y la cabecera pintadas y las filas de jugadores dibujadas encima.
+Sale **todo el que tenga cuenta**, de más a menos puntos, con su cara, su
+división y su total; tu fila va resaltada en dorado, y si no entras en el top se
+te añade al final.
 
-Se guarda en `data/rankings.json`, que **no va al repositorio**. Ojo con el plan
-gratuito de Render: el disco es efímero y el archivo se borra en cada despliegue
-o reinicio del servicio. Para que el ranking sobreviva hace falta un disco
-persistente (planes de pago) o una base de datos externa.
+- **Ganar una partida: +20 puntos. Perderla: −15.** No se baja de 0. Los bots no
+  puntúan y las partidas de invitado tampoco.
+- Divisiones: **Novato** (0–1000), **Capitán** (1000–2000), **Shichibukai**
+  (2000–3000), **Yonkou** (3000–4000) y **Rey Pirata** (4000+).
+- Al terminar una partida, la pantalla de resultado te dice cuánto has sumado o
+  restado y en qué división quedas.
+
+Las cuentas se guardan en `data/users.json` y el marcador antiguo por nombre
+(sin cuenta) sigue en `data/rankings.json`. Ninguno de los dos va al
+repositorio. Ojo con el plan gratuito de Render: el disco es efímero y ambos
+archivos se borran en cada despliegue o reinicio del servicio. Para que las
+cuentas y los puntos sobrevivan hace falta un disco persistente (planes de pago)
+o una base de datos externa.
 
 ## Wiki Pirata
 
@@ -269,7 +313,28 @@ de su tripulación, así que no hace falta tenerlas las 40 para empezar. No se
 enlazan imágenes desde wikis externas: son poco fiables (se rompen al cambiar la
 URL, bloqueadas por CORS en algunas redes) y de derechos dudosos.
 
-## Pantalla de inicio
+## Pantallas ilustradas
+
+Cuatro pantallas están montadas igual: manda una ilustración de 1024x1536 y
+encima van los controles de verdad, colocados en píxeles del dibujo dentro de un
+`.lienzo` que `encajarLienzo()` escala y centra. Las cajas de cada una están en
+`public/css/style.css` y el encaje (qué trozo tiene que verse sí o sí) en el
+mapa `LIENZOS` de `public/js/game.js`:
+
+| Pantalla | Ilustración | Lienzo |
+| --- | --- | --- |
+| Inicio de sesión | `login.webp` | `login-lienzo` |
+| Ficha de pirata | `login.webp` | `perfil-lienzo` |
+| Menú | `harbor.webp` | `menu-lienzo` |
+| Ránkings | `rankings.webp` | `rank-lienzo` |
+| Wiki Pirata | `wiki.webp` | `wiki-lienzo` |
+
+Si cambias un dibujo hay que volver a medir sus cajas. El lienzo arranca oculto
+y `game.js` lo destapa al colocarlo: el HTML se pinta antes de que corra el
+módulo (va diferido) y si no se veía un fogonazo del dibujo a tamaño real, como
+un zoom al entrar.
+
+### El menú
 
 Es la ilustración `public/img/menu/harbor.webp`: el título, el letrero del
 nombre y los cuatro botones **están pintados en ella**. Encima van los
@@ -290,11 +355,8 @@ El encaje llena la pantalla, pero sin pasarse de lo que dejaría fuera el títul
 o el último botón; lo que sobra a los lados se rellena con la propia imagen
 desenfocada. Comprobado de 360x520 a 1280x800.
 
-Si cambias el dibujo hay que volver a medir las cajas (están en el bloque
-«Menu» de `public/css/style.css`, en píxeles de la imagen). El lienzo arranca
-oculto y `game.js` lo destapa al colocarlo: el HTML se pinta antes de que corra
-el módulo (va diferido) y si no se veía un fogonazo del dibujo a tamaño real,
-como un zoom al entrar.
+Con la sesión iniciada, el letrero del nombre enseña el nombre de la cuenta (ya
+no se puede escribir) y la cara elegida, y debajo aparece «Cerrar sesión».
 
 ## Marcos del banquillo y de la tienda
 
@@ -416,7 +478,16 @@ completa de nombres de archivo por tripulación.
 - `server/GameRoom.js` — máquina de estados de una partida de 2 o 4 jugadores
   (preparación / combate / resultado), emparejamientos por ronda, tienda,
   banquillo, fusiones, IA del bot, reconexión y eliminación por puestos.
-- `server/index.js` — servidor Express + Socket.io, una cola por modo.
+- `server/index.js` — servidor Express + Socket.io, una cola por modo y las
+  rutas de cuentas (`/api/config`, `/api/auth/google`, `/api/me`,
+  `/api/profile`, `/api/rankings`).
+- `server/users.js` — cuentas de jugador: nombre, icono, puntos de ranking
+  (+20 / −15) y divisiones. Se guardan en `data/users.json`.
+- `server/auth.js` — inicio de sesión con Google, sin dependencias: comprueba la
+  firma del token contra las claves públicas de Google y entrega un token de
+  sesión propio, que vive en memoria.
+- `server/rankings.js` — marcador antiguo por nombre de pirata, para las
+  partidas de quien juega sin cuenta.
 - `public/js/scene3d.js` — la escena de combate: pone la ilustración de la
   cubierta de fondo y dibuja encima las fichas y los efectos con Three.js. La
   correspondencia entre casilla del juego y casilla dibujada es una homografía

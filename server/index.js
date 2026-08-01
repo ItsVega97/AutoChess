@@ -9,6 +9,8 @@ const { CHARACTERS, CREWS } = require('./characterData');
 const { BOARD_COLS, BOARD_ROWS } = require('./battle');
 const GameRoom = require('./GameRoom');
 const rankings = require('./rankings');
+const users = require('./users');
+const auth = require('./auth');
 
 const app = express();
 const server = http.createServer(app);
@@ -95,9 +97,77 @@ function listModels() {
 }
 app.get('/api/models', (req, res) => res.json({ models: listModels() }));
 
-// Ranking publico: lo ve cualquiera, sin cuentas. La identidad es el nombre de
-// pirata con el que juegas.
-app.get('/api/rankings', (req, res) => res.json({ players: rankings.top(50) }));
+// ---------------- Cuentas ----------------
+app.use(express.json({ limit: '16kb' }));
+
+// Que sabe el cliente antes de nada: si hay login de Google montado y con que
+// identificador tiene que pedirlo. Sin GOOGLE_CLIENT_ID el juego sigue
+// funcionando, solo que entrando como invitado.
+app.get('/api/config', (req, res) => {
+  res.json({
+    googleClientId: auth.CLIENT_ID,
+    googleEnabled: auth.configurado(),
+    divisiones: users.DIVISIONES.map((d) => ({
+      id: d.id, label: d.label, min: d.min, max: d.max === Infinity ? null : d.max, color: d.color,
+    })),
+    puntos: { victoria: users.PUNTOS_VICTORIA, derrota: users.PUNTOS_DERROTA },
+  });
+});
+
+// El token de sesion viaja en la cabecera Authorization
+function sesionDe(req) {
+  const cab = String(req.headers.authorization || '');
+  const token = cab.startsWith('Bearer ') ? cab.slice(7) : '';
+  const id = token ? auth.usuarioDeSesion(token) : null;
+  return { token, id };
+}
+
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const perfil = await auth.verificarCredential(req.body && req.body.credential);
+    const u = users.upsertFromGoogle(perfil);
+    res.json({ token: auth.crearSesion(u.id), user: users.vista(u) });
+  } catch (e) {
+    res.status(401).json({ error: e.message || 'No se pudo iniciar sesión.' });
+  }
+});
+
+app.get('/api/me', (req, res) => {
+  const { id } = sesionDe(req);
+  const u = id ? users.get(id) : null;
+  if (!u) return res.status(401).json({ error: 'sin sesión' });
+  res.json({ user: users.vista(u) });
+});
+
+// Nombre de pirata e icono: obligatorio la primera vez, y luego se puede cambiar
+app.post('/api/profile', (req, res) => {
+  const { id } = sesionDe(req);
+  if (!id) return res.status(401).json({ error: 'sin sesión' });
+  const r = users.setProfile(id, { name: req.body && req.body.name, icon: req.body && req.body.icon });
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ user: users.vista(r.user) });
+});
+
+app.post('/api/logout', (req, res) => {
+  const { token } = sesionDe(req);
+  if (token) auth.cerrarSesion(token);
+  res.json({ ok: true });
+});
+
+// Ranking: los jugadores con cuenta, ordenados por puntos y con su division.
+// Se manda tambien el marcador antiguo (por nombre, sin cuenta) para no perder
+// las partidas que se jugaron antes de que existiera el login.
+app.get('/api/rankings', (req, res) => {
+  const { id } = sesionDe(req);
+  const jugadores = users.top(50);
+  const yo = id ? users.vista(users.get(id)) : null;
+  // si el que pregunta no entra en el top, se le manda aparte con su puesto
+  let miPuesto = null;
+  if (yo && yo.name && !jugadores.some((j) => j.id === yo.id)) {
+    miPuesto = { ...yo, rank: null };
+  }
+  res.json({ players: jugadores, me: miPuesto || (yo && jugadores.find((j) => j.id === yo.id)) || null, legacy: rankings.top(20) });
+});
 
 const rooms = new Map(); // roomId -> GameRoom
 const socketRoom = new Map(); // socketId -> roomId
@@ -105,6 +175,16 @@ const sessions = new Map(); // token -> { roomId, side }
 // Una cola por modo: 1v1 necesita 2 jugadores y "4 piratas" necesita 4.
 const queues = { '1v1': [], '4p': [] };
 const NOMBRES_BOT = ['CPU Rival', 'CPU Nakama', 'CPU Marine', 'CPU Corsario'];
+
+// Quien es el que juega. Si manda su token de sesion la partida cuenta para su
+// cuenta (nombre e icono de ranking incluidos); si no, entra como invitado con
+// el nombre que haya escrito y solo suma al marcador antiguo.
+function identidad(socket, datos) {
+  const id = auth.usuarioDeSesion((datos && datos.authToken) || socket.data.authToken || '');
+  const u = id ? users.get(id) : null;
+  if (u && u.name) return { userId: u.id, name: u.name };
+  return { userId: null, name: String((datos && datos.name) || 'Pirata').slice(0, 16) };
+}
 
 function safe(fn) {
   return (...args) => {
@@ -160,16 +240,19 @@ function getRoom(socketId) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('findMatch', safe(({ name, mode }) => {
-    const safeName = String(name || 'Entrenador').slice(0, 16);
-    const modo = mode === '4p' ? '4p' : '1v1';
+  // El cliente manda su token nada mas conectar si ha iniciado sesion
+  socket.on('auth', safe(({ token }) => { socket.data.authToken = String(token || ''); }));
+
+  socket.on('findMatch', safe((datos) => {
+    const { name: safeName, userId } = identidad(socket, datos);
+    const modo = datos && datos.mode === '4p' ? '4p' : '1v1';
     const hacenFalta = modo === '4p' ? 4 : 2;
     // Si estaba buscando en el otro modo, se le saca de alli
     for (const q of Object.values(queues)) {
       const i = q.findIndex((e) => e.socketId === socket.id);
       if (i !== -1) q.splice(i, 1);
     }
-    queues[modo].push({ socketId: socket.id, name: safeName });
+    queues[modo].push({ socketId: socket.id, name: safeName, userId });
     socket.emit('queued', { mode: modo, waiting: queues[modo].length, needed: hacenFalta });
     // Avisamos a los que esperan de cuantos van
     for (const e of queues[modo]) {
@@ -178,7 +261,7 @@ io.on('connection', (socket) => {
     }
     if (queues[modo].length >= hacenFalta) {
       const grupo = queues[modo].splice(0, hacenFalta);
-      createRoom(grupo.map((g) => ({ id: g.socketId, name: g.name })));
+      createRoom(grupo.map((g) => ({ id: g.socketId, name: g.name, userId: g.userId })));
     }
   }));
 
@@ -189,7 +272,7 @@ io.on('connection', (socket) => {
     if (!cola.some((e) => e.socketId === socket.id)) return;
     if (cola.length < 2) return;
     const humanos = cola.splice(0, 4);
-    const jugadores = humanos.map((h) => ({ id: h.socketId, name: h.name }));
+    const jugadores = humanos.map((h) => ({ id: h.socketId, name: h.name, userId: h.userId }));
     for (let i = jugadores.length; i < 4; i++) {
       jugadores.push({ id: `bot-${socket.id}-${i}`, name: NOMBRES_BOT[i - 1], isBot: true });
     }
@@ -203,10 +286,10 @@ io.on('connection', (socket) => {
     }
   }));
 
-  socket.on('playAI', safe(({ name, mode }) => {
-    const safeName = String(name || 'Entrenador').slice(0, 16);
-    const total = mode === '4p' ? 4 : 2;
-    const jugadores = [{ id: socket.id, name: safeName }];
+  socket.on('playAI', safe((datos) => {
+    const { name: safeName, userId } = identidad(socket, datos);
+    const total = datos && datos.mode === '4p' ? 4 : 2;
+    const jugadores = [{ id: socket.id, name: safeName, userId }];
     for (let i = 1; i < total; i++) {
       jugadores.push({ id: `bot-${socket.id}-${i}`, name: NOMBRES_BOT[i - 1], isBot: true });
     }

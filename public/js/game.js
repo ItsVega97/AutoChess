@@ -56,6 +56,9 @@ import { getThumb, getThumbSync } from './thumbs.js';
   const LIENZOS = {
     'menu-lienzo': { w: 1024, h: 1536, cx: 537, cy: 765, ancho: 725, alto: 1420 },
     'wiki-lienzo': { w: 1024, h: 1536, cx: 521, cy: 697, ancho: 972, alto: 1365 },
+    'login-lienzo': { w: 1024, h: 1536, cx: 512, cy: 730, ancho: 700, alto: 1220 },
+    'perfil-lienzo': { w: 1024, h: 1536, cx: 512, cy: 730, ancho: 700, alto: 1220 },
+    'rank-lienzo': { w: 1024, h: 1536, cx: 512, cy: 775, ancho: 800, alto: 1380 },
   };
   function encajarLienzo(id) {
     const lienzo = document.getElementById(id);
@@ -171,6 +174,8 @@ import { getThumb, getThumbSync } from './thumbs.js';
           if (scene) scene.setBoard(boardCols, boardRows);
         }
         renderWiki();
+        pintarIconosPerfil();
+        pintarCuentaEnMenu();
         if (myState) { renderShop(myState.you); renderBench(myState.you); refreshBoard(); }
       })
       .catch((err) => {
@@ -198,38 +203,76 @@ import { getThumb, getThumbSync } from './thumbs.js';
   document.getElementById('btn-rankings-back').addEventListener('click', () => show('screen-menu'));
 
   // ---------------- Ránkings ----------------
-  // Marcador publico de victorias. La identidad es el nombre de pirata, sin
-  // cuentas: se pide al servidor cada vez que se abre la pantalla.
+  // Tabla de jugadores con cuenta, ordenados por puntos. Las divisiones y la
+  // cabecera vienen pintadas en la ilustracion: aqui solo se dibujan las filas
+  // encima de las de ejemplo.
+  // Cara redonda de un jugador: su carta de personaje si eligio una, y si no
+  // la inicial de su nombre.
+  function caraJugador(j) {
+    const cara = el('div', 'r-cara');
+    const carta = j.icon && charDb[j.icon] && charDb[j.icon].card;
+    if (carta) {
+      const img = new Image();
+      img.src = carta;
+      img.alt = '';
+      img.loading = 'lazy';
+      cara.appendChild(img);
+    } else {
+      cara.textContent = (j.name || '?').charAt(0).toUpperCase();
+    }
+    return cara;
+  }
+
+  // 4250 -> "4.250"
+  function conMiles(n) {
+    return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  function filaRanking(j, esMio) {
+    const fila = el('div', `r-fila${esMio ? ' yo' : ''}`);
+    const chapas = { 1: 'oro', 2: 'plata', 3: 'bronce' };
+    const chapa = chapas[j.rank];
+    fila.appendChild(chapa
+      ? el('div', `r-pos medalla ${chapa}`, `<span>${j.rank}</span>`)
+      : el('div', 'r-pos', j.rank ? String(j.rank) : '—'));
+    fila.appendChild(caraJugador(j));
+    // textContent: el nombre lo escribe el jugador
+    const nombre = el('div', 'r-nombre');
+    nombre.textContent = j.name;
+    fila.appendChild(nombre);
+    const div = el('div', 'r-div');
+    div.textContent = (j.division && j.division.label ? j.division.label : '').toUpperCase();
+    if (j.division && j.division.color) div.style.background = j.division.color;
+    fila.appendChild(div);
+    fila.appendChild(el('div', 'r-pts', conMiles(j.points)));
+    return fila;
+  }
+
   function cargarRankings() {
     const wrap = document.getElementById('rankings-list');
-    wrap.innerHTML = '<div class="rank-empty">Cargando...</div>';
-    fetch('api/rankings')
+    wrap.innerHTML = '';
+    wrap.appendChild(el('div', 'r-vacio', 'Cargando la lista de piratas...'));
+    fetch('api/rankings', { headers: cabeceras() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const lista = (d && d.players) || [];
         wrap.innerHTML = '';
         if (!lista.length) {
-          wrap.appendChild(el('div', 'rank-empty',
-            'Todavía no hay partidas registradas. ¡Gana una y estrena la tabla!'));
+          wrap.appendChild(el('div', 'r-vacio',
+            'Todavía no hay piratas en la tabla.<br>Inicia sesión, gana una partida y estrénala tú.'));
           return;
         }
-        const yo = (nameInput.value || '').trim();
-        const medallas = { 1: '🥇', 2: '🥈', 3: '🥉' };
-        for (const j of lista) {
-          const fila = el('div', `rank-row${j.rank <= 3 ? ` top${j.rank}` : ''}${j.name === yo ? ' me' : ''}`);
-          fila.appendChild(el('div', 'rank-pos', medallas[j.rank] || `${j.rank}º`));
-          // textContent, que el nombre lo escribe el jugador
-          const nombre = el('div', 'rank-name');
-          nombre.textContent = j.name;
-          fila.appendChild(nombre);
-          fila.appendChild(el('div', 'rank-wins', `${j.wins} 🏆`));
-          fila.appendChild(el('div', 'rank-games', `${j.games} partida${j.games === 1 ? '' : 's'}`));
-          wrap.appendChild(fila);
+        const mio = cuenta && cuenta.id;
+        for (const j of lista) wrap.appendChild(filaRanking(j, j.id === mio));
+        // si el que mira no entra en el top, se le pone al final para que vea
+        // sus puntos igualmente
+        if (d.me && !lista.some((j) => j.id === d.me.id)) {
+          wrap.appendChild(filaRanking(d.me, true));
         }
       })
       .catch(() => {
         wrap.innerHTML = '';
-        wrap.appendChild(el('div', 'rank-empty', 'No se pudo cargar el ranking.'));
+        wrap.appendChild(el('div', 'r-vacio', 'No se pudo cargar el ranking.'));
       });
   }
 
@@ -334,12 +377,226 @@ import { getThumb, getThumbSync } from './thumbs.js';
   });
   pintarModo();
 
+  // ---------------- Cuenta de jugador ----------------
+  // Se entra con Google y la cuenta guarda el nombre de pirata, el icono y los
+  // puntos de ranking (+20 por ganar, -15 por perder). Tambien se puede jugar
+  // sin cuenta: entonces no se puntua y el nombre lo pone uno a mano.
+  let config = null;
+  let cuenta = null;
+  let authToken = localStorage.getItem('nr-token') || '';
+  let iconoElegido = null;
+
+  function cabeceras(extra) {
+    const h = extra ? { ...extra } : {};
+    if (authToken) h.Authorization = `Bearer ${authToken}`;
+    return h;
+  }
+  function guardarToken(t) {
+    authToken = t || '';
+    if (authToken) localStorage.setItem('nr-token', authToken);
+    else localStorage.removeItem('nr-token');
+    socket.emit('auth', { token: authToken });
+  }
+
+  // Carta que se usa como cara del jugador
+  function iconoUrl(id) {
+    return (id && charDb[id] && charDb[id].card) || '';
+  }
+
+  function pintarCuentaEnMenu() {
+    const img = document.getElementById('menu-icono');
+    const salir = document.getElementById('btn-logout');
+    if (!img || !salir) return;
+    if (cuenta && cuenta.name) {
+      // con cuenta el nombre manda el servidor, asi que aqui solo se enseña
+      nameInput.value = cuenta.name;
+      nameInput.readOnly = true;
+      salir.classList.remove('hidden');
+      const url = iconoUrl(cuenta.icon);
+      if (url) { img.src = url; img.classList.remove('hidden'); } else img.classList.add('hidden');
+    } else {
+      nameInput.readOnly = false;
+      salir.classList.add('hidden');
+      img.classList.add('hidden');
+    }
+  }
+
+  // A donde va cada uno segun como esté su cuenta
+  function aplicarCuenta(u) {
+    cuenta = u || null;
+    if (cuenta && cuenta.needsProfile) { abrirPerfil(); return; }
+    pintarCuentaEnMenu();
+    show('screen-menu');
+  }
+
+  function avisoLogin(txt) {
+    const aviso = document.getElementById('login-aviso');
+    aviso.textContent = txt;
+    aviso.classList.remove('hidden');
+    document.getElementById('google-btn-box').classList.add('hidden');
+  }
+
+  // El script de Google se carga aparte y puede tardar (o no llegar, si la red
+  // lo bloquea): se espera un poco y, si no aparece, se avisa y queda la
+  // entrada sin cuenta.
+  function conGsi(fn, intentos = 40) {
+    if (window.google && window.google.accounts && window.google.accounts.id) { fn(); return; }
+    if (intentos <= 0) { avisoLogin('No se pudo cargar el inicio de sesión de Google. Puedes entrar sin cuenta.'); return; }
+    setTimeout(() => conGsi(fn, intentos - 1), 250);
+  }
+
+  function montarGoogle() {
+    if (!config || !config.googleEnabled) {
+      avisoLogin('El inicio de sesión con Google todavía no está configurado en el servidor. Puedes entrar sin cuenta.');
+      return;
+    }
+    conGsi(() => {
+      window.google.accounts.id.initialize({
+        client_id: config.googleClientId,
+        callback: entrarConGoogle,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      window.google.accounts.id.renderButton(document.getElementById('google-btn'), {
+        type: 'standard', theme: 'filled_blue', size: 'large',
+        text: 'signin_with', shape: 'rectangular', locale: 'es', width: 400,
+      });
+    });
+  }
+
+  function entrarConGoogle(resp) {
+    fetch('api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: resp && resp.credential }),
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) throw new Error(d && d.error);
+        guardarToken(d.token);
+        aplicarCuenta(d.user);
+      })
+      .catch((e) => avisoLogin(e.message || 'No se pudo iniciar sesión. Inténtalo otra vez.'));
+  }
+
+  document.getElementById('btn-login-guest').addEventListener('click', () => {
+    guardarToken('');
+    cuenta = null;
+    nameInput.value = localStorage.getItem('pcr-name') || '';
+    pintarCuentaEnMenu();
+    show('screen-menu');
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    fetch('api/logout', { method: 'POST', headers: cabeceras() }).catch(() => {});
+    guardarToken('');
+    cuenta = null;
+    nameInput.value = '';
+    pintarCuentaEnMenu();
+    show('screen-login');
+  });
+
+  // ---------------- Ficha de pirata (nombre e icono) ----------------
+  const perfilNombre = document.getElementById('input-perfil-name');
+  const perfilError = document.getElementById('perfil-error');
+  const perfilOk = document.getElementById('btn-perfil-ok');
+
+  function abrirPerfil() {
+    show('screen-perfil');
+    perfilError.classList.add('hidden');
+    perfilOk.disabled = false;
+    perfilNombre.value = (cuenta && cuenta.name) || '';
+    if (cuenta && cuenta.icon) iconoElegido = cuenta.icon;
+    pintarIconosPerfil();
+  }
+
+  function pintarIconosPerfil() {
+    const wrap = document.getElementById('perfil-iconos');
+    if (!wrap) return;
+    const lista = Object.values(charDb).filter((c) => c.card);
+    if (!lista.length) {
+      wrap.innerHTML = '';
+      wrap.appendChild(el('div', 'r-vacio', 'Cargando piratas...'));
+      return;
+    }
+    if (!iconoElegido || !charDb[iconoElegido]) iconoElegido = lista[0].id;
+    wrap.innerHTML = '';
+    for (const c of lista) {
+      const b = el('button', `p-icono${c.id === iconoElegido ? ' sel' : ''}`);
+      b.type = 'button';
+      b.title = c.name;
+      const img = new Image();
+      img.src = c.card;
+      img.alt = c.name;
+      img.loading = 'lazy';
+      b.appendChild(img);
+      b.addEventListener('click', () => { iconoElegido = c.id; pintarIconosPerfil(); });
+      wrap.appendChild(b);
+    }
+  }
+
+  perfilOk.addEventListener('click', () => {
+    const nombre = (perfilNombre.value || '').trim();
+    if (nombre.length < 2) {
+      perfilError.textContent = 'Escribe un nombre de al menos 2 letras.';
+      perfilError.classList.remove('hidden');
+      return;
+    }
+    perfilError.classList.add('hidden');
+    perfilOk.disabled = true;
+    fetch('api/profile', {
+      method: 'POST',
+      headers: cabeceras({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ name: nombre, icon: iconoElegido }),
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        perfilOk.disabled = false;
+        if (!ok) {
+          perfilError.textContent = (d && d.error) || 'No se pudo guardar.';
+          perfilError.classList.remove('hidden');
+          return;
+        }
+        cuenta = d.user;
+        pintarCuentaEnMenu();
+        show('screen-menu');
+      })
+      .catch(() => {
+        perfilOk.disabled = false;
+        perfilError.textContent = 'No se pudo guardar. Revisa la conexión.';
+        perfilError.classList.remove('hidden');
+      });
+  });
+
+  // Arranque: se mira si ya habia una sesion guardada y se decide que pantalla
+  // toca (login, elegir nombre, o directamente el menu).
+  function arrancarSesion() {
+    fetch('api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => { config = c; montarGoogle(); })
+      .catch(() => avisoLogin('No se pudo hablar con el servidor. Puedes entrar sin cuenta.'));
+
+    if (!authToken) { show('screen-login'); return; }
+    socket.emit('auth', { token: authToken });
+    fetch('api/me', { headers: cabeceras() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !d.user) { guardarToken(''); show('screen-login'); return; }
+        aplicarCuenta(d.user);
+      })
+      .catch(() => show('screen-login'));
+  }
+  arrancarSesion();
+  // Puertas de entrada para las pruebas automaticas: sin cuenta de Google de
+  // verdad no hay forma de llegar a estas pantallas desde fuera.
+  window.__cuentaTest = { abrirPerfil, aplicarCuenta, cargarRankings, show };
+
   document.getElementById('btn-play-online').addEventListener('click', () => {
     const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
     searchingOnline = true;
     searchingName = name;
-    socket.emit('findMatch', { name, mode: modoElegido });
+    socket.emit('findMatch', { name, mode: modoElegido, authToken });
     document.getElementById('queue-status').classList.remove('hidden');
     document.getElementById('btn-fill-bots').classList.add('hidden');
   });
@@ -354,7 +611,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
   document.getElementById('btn-play-ai').addEventListener('click', () => {
     const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
     localStorage.setItem('pcr-name', name);
-    socket.emit('playAI', { name, mode: modoElegido });
+    socket.emit('playAI', { name, mode: modoElegido, authToken });
   });
 
   document.getElementById('btn-restart').addEventListener('click', () => {
@@ -398,10 +655,11 @@ import { getThumb, getThumbSync } from './thumbs.js';
   });
 
   socket.on('connect', () => {
+    if (authToken) socket.emit('auth', { token: authToken });
     if (sessionToken) {
       socket.emit('rejoin', { token: sessionToken });
     } else if (searchingOnline) {
-      socket.emit('findMatch', { name: searchingName, mode: modoElegido });
+      socket.emit('findMatch', { name: searchingName, mode: modoElegido, authToken });
     }
   });
 
@@ -450,8 +708,22 @@ import { getThumb, getThumbSync } from './thumbs.js';
 
   socket.on('gameOver', ({ won, draw }) => {
     document.getElementById('end-title').textContent = draw ? 'Empate' : won ? 'Victoria' : 'Derrota';
-    document.getElementById('end-subtitle').textContent = '';
+    const sub = document.getElementById('end-subtitle');
+    sub.textContent = '';
     show('screen-end');
+    // Con cuenta, la partida suma o resta puntos de ranking: se pide el total
+    // nuevo para enseñarlo aqui mismo.
+    if (!authToken || !cuenta) return;
+    const signo = won ? `+${config ? config.puntos.victoria : 20}` : `${config ? config.puntos.derrota : -15}`;
+    sub.textContent = `${signo} pts de ránking`;
+    fetch('api/me', { headers: cabeceras() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !d.user) return;
+        cuenta = d.user;
+        sub.textContent = `${signo} pts · ${cuenta.points} en total · ${cuenta.division.label}`;
+      })
+      .catch(() => {});
   });
 
   // ---------------- Estado de partida ----------------

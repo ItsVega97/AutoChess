@@ -224,12 +224,6 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
   justify-content: center;
   padding: 24px 16px;
 }
-/* Los rankings son su propia pantalla y si necesitan scroll */
-#screen-rankings.active {
-  display: flex;
-  justify-content: center;
-  padding: 20px 16px 40px;
-}
 .menu-card {
   background: rgba(12, 30, 58, .78);
   border: 3px solid rgba(255,255,255,.15);
@@ -929,25 +923,389 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .w-hab-desc { margin-top: 3px; }
 
 
-/* ---------- Ránkings ---------- */
-.rank-list { display: flex; flex-direction: column; gap: 6px; }
-.rank-row {
+/* ---------- Iniciar sesión ----------
+   El cartel, el pergamino y el boton azul de Google estan pintados en la
+   ilustracion. Encima solo va el boton de verdad de Google, transparente y del
+   mismo tamano que el pintado: asi se toca el dibujo y se abre el login. */
+#screen-login.active,
+#screen-perfil.active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  height: min(var(--app-height, 100svh), 100svh);
+  overflow: hidden;
+  padding: 0;
+}
+#screen-login.active::before,
+#screen-perfil.active::before {
+  content: '';
+  position: absolute;
+  inset: -30px;
+  background: url('../img/menu/login.webp') no-repeat center / cover;
+  filter: blur(24px) brightness(.62) saturate(.9);
+  transform: scale(1.18);
+}
+.login-lienzo { background: url('../img/menu/login.webp') no-repeat 0 0 / 1024px 1536px; }
+
+/* Caja del boton de Google, justo encima del pintado. El widget que dibuja
+   Google no se puede maquillar, asi que se estira hasta llenarla y se deja
+   invisible: se ve el dibujo y se pulsa el boton real. */
+.l-google {
+  position: absolute;
+  left: 240px; top: 995px; width: 550px; height: 110px;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.l-google > div {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 400px;
+  transform: translate(-50%, -50%) scale(1.4);
+  opacity: .01;          /* tiene que seguir siendo tocable, no display:none */
+}
+.l-google:active { filter: brightness(1.15); }
+
+/* Si el servidor no tiene configurado el login de Google, se avisa aqui mismo
+   en vez de dejar un boton que no hace nada. */
+.l-aviso {
+  position: absolute;
+  left: 228px; top: 995px; width: 574px; height: 110px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(12, 30, 58, .78);
-  border: 2px solid rgba(255,255,255,.13);
-  border-radius: 12px;
-  padding: 9px 12px;
-  font-size: 14px;
+  justify-content: center;
+  text-align: center;
+  padding: 0 22px;
+  border-radius: 16px;
+  background: rgba(20,12,4,.92);
+  box-shadow: inset 0 0 0 4px rgba(255,210,63,.55);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #ffe8b0;
 }
-.rank-row.me { border-color: rgba(61,220,132,.8); }
-.rank-pos { font-weight: 900; width: 34px; flex: 0 0 auto; opacity: .8; }
-.rank-row.top1 .rank-pos, .rank-row.top2 .rank-pos, .rank-row.top3 .rank-pos { opacity: 1; font-size: 17px; }
-.rank-name { flex: 1 1 auto; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-wins { font-weight: 900; color: var(--gold); }
-.rank-games { font-size: 11px; opacity: .7; width: 74px; text-align: right; flex: 0 0 auto; }
-.rank-empty { text-align: center; opacity: .75; font-size: 13px; padding: 22px 0; }
+.l-aviso.hidden { display: none; }
+
+.l-invitado {
+  position: absolute;
+  left: 282px; top: 1258px; width: 460px; height: 76px;
+  border: 0;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 32px;
+  font-weight: 800;
+  color: #f6e2b6;
+  background: rgba(20,12,4,.72);
+  box-shadow: inset 0 0 0 4px rgba(214,168,92,.7);
+  cursor: pointer;
+}
+.l-invitado:active { background: rgba(20,12,4,.9); }
+
+/* ---------- Ficha de pirata (primera vez) ----------
+   Mismo pergamino del inicio, tapado por dentro para poner el formulario. */
+.p-panel {
+  position: absolute;
+  left: 228px; top: 522px; width: 568px; height: 676px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 28px 22px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #e8c483 0%, #ddb36a 55%, #d0a054 100%);
+  box-shadow: inset 0 4px 14px rgba(120,80,20,.28);
+  color: #3a2409;
+}
+.p-titulo {
+  font-size: 40px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: #3a2409;
+}
+.p-sub {
+  font-size: 21px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+  margin: 4px 0 12px;
+  color: rgba(58,36,9,.78);
+}
+.p-campo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  height: 72px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: rgba(255,244,214,.72);
+  box-shadow: inset 0 0 0 4px rgba(122,84,32,.5);
+}
+.p-calavera { font-size: 40px; line-height: 1; }
+.p-campo input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-family: inherit;
+  font-size: 38px;
+  font-weight: 800;
+  color: #241505;
+}
+.p-campo input::placeholder { color: rgba(60,35,5,.4); font-weight: 700; }
+.p-etiqueta {
+  flex: 0 0 auto;
+  margin: 14px 0 6px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: rgba(58,36,9,.8);
+}
+/* Rejilla de caras: son las mismas cartas de personaje del juego, recortadas
+   en redondo por la cabeza. */
+.p-iconos {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  /* Medidas fijas a proposito: con columnas elasticas la fila se quedaba sin
+     alto y las caras salian pegadas unas encima de otras. */
+  grid-template-columns: repeat(4, 104px);
+  justify-content: center;
+  gap: 20px 18px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(90,58,18,.16);
+  box-shadow: inset 0 0 0 3px rgba(122,84,32,.35);
+}
+.p-icono {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  background: #6d4a1c;
+  /* aro claro por fuera: si no, las caras vecinas se funden unas con otras */
+  box-shadow: inset 0 0 0 4px rgba(58,36,9,.55), 0 0 0 5px rgba(240,212,158,.95);
+  transition: transform .12s ease;
+}
+/* Encuadre sobre la cara: el desplazamiento va en % de la propia imagen, como
+   en el banquillo, para que caiga a la misma altura en todas las cartas. */
+.p-icono img {
+  position: absolute;
+  left: 50%; top: 0;
+  width: 160%;
+  transform: translate(-50%, -12%);
+}
+.p-icono.sel {
+  box-shadow: 0 0 0 9px var(--gold), 0 0 20px 6px rgba(255,210,63,.7);
+  transform: scale(1.06);
+}
+.p-error {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  color: #8c1f18;
+}
+.p-error.hidden { display: none; }
+.p-ok {
+  margin-top: 12px;
+  flex: 0 0 auto;
+  height: 80px;
+  border: 0;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 38px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+  background: linear-gradient(180deg, #3f8fd8, #1d5798);
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,.28), inset 0 0 0 4px rgba(28,20,6,.55);
+  cursor: pointer;
+}
+.p-ok:active { transform: translateY(2px); }
+.p-ok:disabled { filter: grayscale(.5); opacity: .7; cursor: default; }
+
+/* ---------- Ránkings ----------
+   Las divisiones y la cabecera de la tabla ya vienen pintadas; encima solo se
+   dibujan las filas de jugadores, tapando las de ejemplo del dibujo. */
+#screen-rankings.active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  height: min(var(--app-height, 100svh), 100svh);
+  overflow: hidden;
+  padding: 0;
+}
+#screen-rankings.active::before {
+  content: '';
+  position: absolute;
+  inset: -30px;
+  background: url('../img/menu/rankings.webp') no-repeat center / cover;
+  filter: blur(24px) brightness(.62) saturate(.9);
+  transform: scale(1.18);
+}
+.rank-lienzo { background: url('../img/menu/rankings.webp') no-repeat 0 0 / 1024px 1536px; }
+
+.r-tabla {
+  position: absolute;
+  left: 140px; top: 963px; width: 748px; height: 368px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #e0b876 0%, #d9ae68 100%);
+  color: #33200a;
+}
+.r-fila {
+  display: flex;
+  align-items: center;
+  height: 58px;
+  padding: 0 12px 0 0;
+  border-bottom: 2px solid rgba(122,84,32,.35);
+}
+.r-fila.yo {
+  background: rgba(255,220,120,.62);
+  box-shadow: inset 0 0 0 3px var(--gold);
+}
+.r-pos {
+  width: 70px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 27px;
+  font-weight: 900;
+  color: #4a2f10;
+}
+/* Los tres primeros llevan chapa, como en el dibujo */
+.r-pos.medalla {
+  font-size: 24px;
+  color: #fff;
+  text-shadow: 0 2px 2px rgba(0,0,0,.5);
+}
+.r-pos.medalla span {
+  width: 42px; height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px rgba(58,36,9,.6), inset 0 -4px 0 rgba(0,0,0,.22);
+}
+.r-pos.oro span { background: linear-gradient(180deg, #f4cf62, #b98c1c); }
+.r-pos.plata span { background: linear-gradient(180deg, #dfe4e8, #9aa4ad); }
+.r-pos.bronce span { background: linear-gradient(180deg, #dd9d5d, #9c5f26); }
+.r-cara {
+  position: relative;
+  width: 48px; height: 48px;
+  flex: 0 0 auto;
+  margin-right: 16px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #7c5722;
+  box-shadow: inset 0 0 0 3px rgba(58,36,9,.55);
+  font-size: 24px;
+  font-weight: 900;
+  color: #f4e0b4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.r-cara img { position: absolute; left: 50%; top: 0; width: 160%; transform: translate(-50%, -12%); }
+.r-nombre {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 27px;
+  font-weight: 700;
+  color: #2c1c07;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r-div {
+  flex: 0 0 auto;
+  width: 190px;
+  margin-right: 14px;
+  text-align: center;
+  padding: 7px 4px;
+  border-radius: 9px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: .5px;
+  color: #fff;
+  text-shadow: 0 2px 2px rgba(0,0,0,.45);
+  box-shadow: inset 0 0 0 3px rgba(58,36,9,.55), inset 0 -4px 0 rgba(0,0,0,.22);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r-pts {
+  flex: 0 0 auto;
+  width: 128px;
+  text-align: right;
+  font-size: 29px;
+  font-weight: 900;
+  color: #3a2409;
+}
+.r-vacio {
+  padding: 40px 30px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: rgba(51,32,10,.85);
+}
+.r-volver {
+  position: absolute;
+  left: 340px; top: 1385px; width: 350px; height: 70px;
+  border: 0; padding: 0;
+  background: transparent;
+  border-radius: 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.r-volver::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: #fff; opacity: 0;
+  transition: opacity .12s ease;
+}
+.r-volver:hover::after { opacity: .14; }
+.r-volver:active::after { opacity: .26; }
+.r-volver:focus-visible { outline: 4px solid var(--gold); outline-offset: 3px; }
+
+/* Cuenta abierta: en el letrero del nombre se ve la cara elegida y el nombre
+   ya no se puede cambiar desde aqui. */
+.m-icono {
+  flex: 0 0 auto;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 18%;
+  box-shadow: inset 0 0 0 3px rgba(58,36,9,.5), 0 0 0 3px rgba(58,36,9,.5);
+}
+.m-icono.hidden { display: none; }
+/* Justo debajo del letrero del nombre, en el hueco que deja el dibujo antes
+   del selector de modo */
+.m-salir {
+  position: absolute;
+  left: 560px; top: 714px; width: 248px; height: 44px;
+  border: 0;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  color: #f6e2b6;
+  background: rgba(14,9,3,.66);
+  box-shadow: inset 0 0 0 3px rgba(214,168,92,.6);
+  cursor: pointer;
+}
+.m-salir.hidden { display: none; }
 
 /* Bandera de la tripulación (Jolly Roger) donde antes iba el emoji */
 .crew-flag { width: 1.35em; height: 1.35em; object-fit: contain; vertical-align: -0.32em; }

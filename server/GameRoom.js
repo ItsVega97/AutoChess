@@ -5,6 +5,7 @@ const { CHARACTERS_BY_ID, MAX_STAR } = require('./characterData');
 const { teamSizeForRound, rollShop, goldIncome, roundDamage, sellPrice, SHOP_SIZE } = require('./economy');
 const { simulateBattle, computeSynergies } = require('./battle');
 const { recordResult } = require('./rankings');
+const users = require('./users');
 
 const PREP_MS = 30000;
 const RESULT_MS = 6000;
@@ -19,11 +20,13 @@ const BOARD_ROWS_PLAYER = 3;
 
 let roomCounter = 0;
 
-function newPlayer(id, name, isBot) {
+function newPlayer(id, name, isBot, userId) {
   return {
     id,
     name,
     isBot: !!isBot,
+    userId: userId || null, // cuenta de Google, si ha iniciado sesion
+
     token: isBot ? null : crypto.randomBytes(12).toString('hex'),
     hp: START_HP,
     gold: START_GOLD,
@@ -58,7 +61,7 @@ class GameRoom {
     this.reconnectTimers = {};
     jugadores.forEach((j, i) => {
       const side = LADOS[i];
-      this.players[side] = newPlayer(j.id, j.name, j.isBot);
+      this.players[side] = newPlayer(j.id, j.name, j.isBot, j.userId);
       this.sideBySocket[j.id] = side;
       this.reconnectTimers[side] = null;
     });
@@ -485,7 +488,10 @@ class GameRoom {
     for (const side of this.sides) {
       const p = this.players[side];
       if (p.isBot || this.puntuado) continue;
-      recordResult(p.name, { won: side === winnerSide, place: this.placements[side] || null });
+      const gano = side === winnerSide;
+      recordResult(p.name, { won: gano, place: this.placements[side] || null });
+      // Y si ademas ha entrado con su cuenta, los puntos de division: +20 / -15
+      if (p.userId) users.recordMatch(p.userId, gano);
     }
     this.puntuado = true;
 

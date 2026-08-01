@@ -9,16 +9,50 @@
 </head>
 <body>
 
+<!-- ================= INICIAR SESIÓN =================
+     La ilustracion ya trae el cartel y el boton azul pintados. Encima se pone
+     el boton de verdad de Google, invisible y del mismo tamano, para que al
+     tocar el dibujo se abra el login sin romper el arte. -->
+<section id="screen-login" class="screen active">
+  <div class="lienzo login-lienzo" id="login-lienzo">
+    <div class="l-google" id="google-btn-box"><div id="google-btn"></div></div>
+    <div class="l-aviso hidden" id="login-aviso"></div>
+    <button id="btn-login-guest" class="l-invitado">Entrar sin cuenta</button>
+  </div>
+</section>
+
+<!-- ================= ELEGIR NOMBRE E ICONO =================
+     Solo la primera vez. Se usa el mismo pergamino del inicio, tapando por
+     dentro lo que trae pintado. -->
+<section id="screen-perfil" class="screen">
+  <div class="lienzo login-lienzo" id="perfil-lienzo">
+    <div class="p-panel">
+      <h2 class="p-titulo">TU FICHA DE PIRATA</h2>
+      <p class="p-sub">Así te van a buscar los Marines</p>
+      <div class="p-campo">
+        <span class="p-calavera">☠</span>
+        <input id="input-perfil-name" maxlength="16" placeholder="Nombre de pirata" autocomplete="off" />
+      </div>
+      <div class="p-etiqueta">ELIGE TU ICONO</div>
+      <div class="p-iconos" id="perfil-iconos"></div>
+      <div class="p-error hidden" id="perfil-error"></div>
+      <button id="btn-perfil-ok" class="p-ok">⚓ ZARPAR</button>
+    </div>
+  </div>
+</section>
+
 <!-- ================= PANTALLA DE INICIO =================
      Es la ilustracion del puerto: el titulo, el letrero y los botones estan
      pintados en ella, y encima van los controles de verdad, colocados en
      pixeles del dibujo (1024x1536). game.js escala el conjunto a la pantalla. -->
-<section id="screen-menu" class="screen active">
+<section id="screen-menu" class="screen">
   <div class="lienzo menu-lienzo" id="menu-lienzo">
     <div class="m-nombre">
       <span class="m-calavera">☠</span>
       <input id="input-name" maxlength="16" placeholder="Tu nombre" />
+      <img class="m-icono hidden" id="menu-icono" alt="" />
     </div>
+    <button id="btn-logout" class="m-salir hidden">Cerrar sesión</button>
 
     <button class="m-zona m-modo1 mode-opt active" data-mode="1v1" aria-label="Modo 1 contra 1"></button>
     <button class="m-zona m-modo2 mode-opt" data-mode="4p" aria-label="Modo 4 piratas"></button>
@@ -37,15 +71,13 @@
   </div>
 </section>
 
-<!-- ================= RANKINGS ================= -->
+<!-- ================= RANKINGS =================
+     Las divisiones y la cabecera de la tabla estan pintadas en la ilustracion;
+     encima se dibujan las filas de verdad, tapando las de ejemplo. -->
 <section id="screen-rankings" class="screen">
-  <div class="wiki">
-    <div class="wiki-head">
-      <button id="btn-rankings-back" class="btn btn-ghost btn-small">← Volver</button>
-      <h2 class="wiki-title">🏆 Ránkings</h2>
-    </div>
-    <p class="wiki-sub">Partidas ganadas por cada pirata. Se identifica por el nombre con el que juegas.</p>
-    <div id="rankings-list" class="rank-list"></div>
+  <div class="lienzo rank-lienzo" id="rank-lienzo">
+    <div class="r-tabla" id="rankings-list"></div>
+    <button id="btn-rankings-back" class="r-volver" aria-label="Volver"></button>
   </div>
 </section>
 
@@ -130,6 +162,7 @@
   <span>Reconectando...</span>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" src="js/game.js"></script>
 </body>
