@@ -354,10 +354,22 @@ Dos cosas a tener en cuenta al preparar un modelo con esqueleto:
   de 12,9 MB a 951 KB, conservando sus tres animaciones cada uno. Casi todo el
   peso eran las texturas (4096x4096 en dos de ellos).
 
-Van animados **Luffy** (`Walking` / `Punching Bag` / `Head Gesture`), **Sanji**
-(`Standing Idle` / `Standing Run Forward` / `Roundhouse Kick`) y **Gol D. Roger**
-(`Walking` / `Happy Idle` / `One Hand Sword Combo`). Los que no traen
-animaciones se quedan quietos, sin más.
+Van animados **Luffy**, **Sanji**, **Usopp**, **Gol D. Roger**, **Zoro**,
+**Rayleigh** y **Shiryu**. Los que no traen animaciones se quedan quietos, sin
+más.
+
+Dos avisos de lo que se ha visto al integrarlos:
+
+- **Animaciones vacías.** Algunas exportaciones traen el clip declarado pero sin
+  contenido: dos claves y 0,07 s, que no mueven nada. Si se usan, la ficha se
+  queda **congelada con los brazos en cruz** (la pose de enlace). El juego las
+  descarta —cualquier clip de menos de 0,2 s— y tira de las que sí valgan, así
+  que como mucho se repite una animación, pero nunca se queda tiesa. Aun así,
+  conviene reexportar: se comprueba rápido mirando la duración de cada clip.
+- **Archivos incompletos.** Si la subida se corta, el `.glb` declara en su
+  cabecera un tamaño mayor que el que tiene y no hay forma de leerlo
+  (`Invalid typed array length`). Se ve comparando `byteLength` con el tamaño
+  del archivo.
 
 ## Fichas 3D
 

@@ -185,12 +185,20 @@ export function preloadModels() {
 // "Standing", asi que andar y golpear se miran antes que el reposo.
 const PISTAS = [
   ['walk', /walk|run|caminar|andar|correr|march/i],
-  ['attack', /punch|attack|hit|kick|slash|strike|combat|combo|sword|swing|melee|shoot|cast|golpe|ataque|patada|espada|corte/i],
+  ['attack', /punch|attack|hit|kick|slash|strike|combat|combo|sword|swing|melee|shoot|shot|fire|blast|throw|arrow|archer|bow|cast|spell|magic|golpe|ataque|patada|espada|corte|disparo|flecha/i],
   ['idle', /idle|gesture|breath|stand|reposo|descans|espera/i],
 ];
+// Hay exportaciones que traen animaciones vacias: dos claves y siete
+// centesimas de duracion, que no mueven nada. Si se usan, la ficha se queda
+// congelada en la pose de enlace (los brazos en cruz), asi que se descartan y
+// se tira de las que si valgan.
+const DUR_MINIMA = 0.2;
 export function pickClips(animations) {
   const clips = { idle: null, walk: null, attack: null };
   const sobran = [];
+  const buenas = (animations || []).filter((c) => c.duration >= DUR_MINIMA);
+  // si TODAS son asi, mejor eso que nada
+  animations = buenas.length ? buenas : animations;
   for (const clip of animations || []) {
     const nombre = clip.name || '';
     const par = PISTAS.find(([k, re]) => !clips[k] && re.test(nombre));
