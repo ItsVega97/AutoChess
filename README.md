@@ -398,6 +398,40 @@ atacar o al lanzar su habilidad y el resto del tiempo está en reposo, con una
 mezcla corta entre una y otra para que no salte de golpe. El golpe se acelera
 para que quepa entero en el tiempo que dura un ataque (~0,6 s).
 
+### De Mixamo al juego, en un comando
+
+Mixamo descarga **tres `.fbx` sueltos**, uno por animación, y el juego necesita
+**un solo `.glb`** con las tres dentro. `tools/mixamo-a-glb.js` lo hace todo:
+
+```bash
+npm install --no-save fbx2gltf @gltf-transform/core \
+  @gltf-transform/functions @gltf-transform/extensions sharp   # una sola vez
+
+node tools/mixamo-a-glb.js \
+  --idle "Breathing Idle.fbx" \
+  --walk "Walking.fbx" \
+  --attack "Punching.fbx" \
+  --salida public/models/strawhat/luffy.glb
+```
+
+Convierte los FBX, coge el que trae el modelo (el que bajaste **With Skin**)
+como base, le pega las otras dos animaciones **reenganchando cada pista al hueso
+que le toca por nombre**, las renombra a `Idle` / `Walking` / `Punching` y
+optimiza las texturas a WebP 1024.
+
+Dos cosas que hace y que conviene saber:
+
+- **Avisa si una animación viene vacía** (menos de 0,2 s). Mixamo exporta a
+  veces clips de dos claves que no mueven nada; es lo que dejó a Zoro, Rayleigh
+  y Shiryu clavados en pose de T. Si sale el aviso, vuelve a Mixamo, comprueba
+  que la vista previa se mueve y descárgala otra vez con FBX Binary, 30 fps y
+  **sin** *keyframe reduction*.
+- **Nunca cuantiza** (`quantize`). Con modelos con esqueleto la descuantización
+  se mete en las matrices de los huesos y la ficha sale a una escala absurda.
+
+En Mixamo, descarga la primera animación con **With Skin** y las otras dos con
+**Without Skin**; el esqueleto **No Fingers (25)** basta y sobra a este tamaño.
+
 Dos cosas a tener en cuenta al preparar un modelo con esqueleto:
 
 - El tamaño se mide **con la animación de reposo puesta**, no con la pose que
