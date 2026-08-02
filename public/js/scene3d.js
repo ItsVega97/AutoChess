@@ -320,11 +320,7 @@ export function createScene(container) {
         const clip = clips[nombre];
         if (!clip) continue;
         const accion = mixer.clipAction(clip);
-        // El golpe suele venir mucho mas largo de lo que dura un ataque en el
-        // juego (~1s), asi que se acelera para que se vea entero.
-        if (nombre === 'attack' && clip.duration > DUR_GOLPE) {
-          accion.timeScale = clip.duration / DUR_GOLPE;
-        }
+        accion.timeScale = ritmo(nombre, clip, char);
         tok.acciones[nombre] = accion;
       }
       tok.accionActual = null;
@@ -336,8 +332,39 @@ export function createScene(container) {
     colocarToken(tok);
   }
 
+  /**
+   * A que ritmo va cada animacion.
+   *
+   * El golpe se ajusta a la cadencia de ataque de la ficha. El motor deja
+   * `atkSpeed` ticks de 150 ms entre golpe y golpe (de 6 a 9 segun el
+   * personaje, ver server/characterData.js), asi que el que pega mas rapido
+   * tiene que verse pegando mas rapido: antes se aplastaban todos a 0,62 s
+   * fijos y Sanji y Barbablanca golpeaban igual. Se deja algo de aire
+   * (PARTE_GOLPE < 1) para que el golpe termine antes del siguiente y no se
+   * encadenen sin respirar.
+   *
+   * Andar y reposo van por debajo de 1 a proposito: las animaciones de Mixamo
+   * son de persona a tamano real y a 55 pixeles se ven nerviosas.
+   */
+  const TICK_MS = 150;            // el mismo tick que server/battle.js
+  const PARTE_GOLPE = 0.7;        // cuanto del hueco entre ataques ocupa el golpe
+  const ATK_SPEED_POR_DEFECTO = 7;
+  const VEL_ANDAR = 0.75;
+  const VEL_REPOSO = 0.85;
+
+  function ritmo(nombre, clip, char) {
+    if (nombre === 'walk') return VEL_ANDAR;
+    if (nombre === 'idle') return VEL_REPOSO;
+    if (nombre !== 'attack') return 1;
+    const ticks = (char && char.atkSpeed) || ATK_SPEED_POR_DEFECTO;
+    const objetivo = (ticks * TICK_MS / 1000) * PARTE_GOLPE; // segundos
+    if (!clip.duration || !objetivo) return 1;
+    // Con topes: un clip muy corto estirado a camara lenta queda peor que uno
+    // que no encaje del todo.
+    return Math.min(4, Math.max(0.4, clip.duration / objetivo));
+  }
+
   // Cambia de animacion con una mezcla corta, para que no salte de golpe
-  const DUR_GOLPE = 0.62; // segundos que dura el golpe una vez acelerado
   function ponerAccion(tok, nombre) {
     tok.accionPedida = nombre;
     if (!tok.acciones) return;
