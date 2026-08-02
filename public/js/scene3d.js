@@ -103,13 +103,24 @@ export function createScene(container) {
   renderer.domElement.style.inset = '0';
 
   // Luz parecida a la del dibujo: sol calido desde la izquierda
-  scene.add(new THREE.HemisphereLight('#e8f4ff', '#6b5334', 1.3));
+  scene.add(new THREE.HemisphereLight('#e8f4ff', '#6b5334', 1.05));
   const sol = new THREE.DirectionalLight('#fff2d0', 1.5);
   sol.position.set(-0.4, 1, 0.7);
   scene.add(sol);
-  const relleno = new THREE.DirectionalLight('#bcd8ff', 0.45);
-  relleno.position.set(0.6, 0.4, -0.8);
+  const relleno = new THREE.DirectionalLight('#bcd8ff', 0.4);
+  relleno.position.set(0.7, 0.35, 0.6);
   scene.add(relleno);
+
+  // Contraluz. Es lo que mas hace por que las fichas se lean a 55 pixeles:
+  // dos luces desde detras dibujan un filo claro por el borde del personaje y
+  // lo despegan de la cubierta, que es marron y verdosa y se los come. Van por
+  // detras (z negativa), asi que solo se ven en el contorno.
+  const filoCalido = new THREE.DirectionalLight('#ffe2a8', 1.7);
+  filoCalido.position.set(-0.75, 0.8, -1);
+  scene.add(filoCalido);
+  const filoFrio = new THREE.DirectionalLight('#bcdcff', 1.25);
+  filoFrio.position.set(0.85, 0.55, -1);
+  scene.add(filoFrio);
 
   const world = new THREE.Group();
   scene.add(world);
@@ -289,6 +300,7 @@ export function createScene(container) {
   function useModel(tok, char, res) {
     tok.instancia = res;
     tok.char = char;
+    darPunch(res.root);
     setModelOpacity(res.root, 1);
     tok.fade = 1;
     res.root.rotation.y = tok.facing || 0;
@@ -425,6 +437,62 @@ export function createScene(container) {
     return sprite;
   }
 
+  // Mancha de sombra: negra y opaca en el centro, que se apaga hacia el borde.
+  // Se dibuja una sola vez y la comparten todas las fichas.
+  const OPACIDAD_SOMBRA = 0.62;
+  let _sombraTex = null;
+  function texturaSombra() {
+    if (_sombraTex) return _sombraTex;
+    const N = 128;
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    // el nucleo se mantiene opaco un tercio del radio: eso es lo que da la
+    // sensacion de contacto, y a partir de ahi se difumina
+    grad.addColorStop(0.00, 'rgba(20,13,5,1)');
+    grad.addColorStop(0.35, 'rgba(20,13,5,0.92)');
+    grad.addColorStop(0.70, 'rgba(20,13,5,0.35)');
+    grad.addColorStop(1.00, 'rgba(20,13,5,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, N, N);
+    _sombraTex = new THREE.CanvasTexture(c);
+    _sombraTex.colorSpace = THREE.SRGBColorSpace;
+    return _sombraTex;
+  }
+
+  /**
+   * Sube saturacion y contraste del modelo ya iluminado.
+   *
+   * Las texturas que salen de un generador 3D vienen apagadas, de foto, y a 55
+   * pixeles sobre una cubierta marron se convierten en un borron pardo. Los
+   * juegos del genero tiran de color plano y saturado, con la silueta muy
+   * separada del fondo. Se hace en el fragment shader, al final del todo, para
+   * que pille tambien lo que aporta la luz.
+   */
+  const SATURACION = 1.28;
+  const CONTRASTE = 1.12;
+  function darPunch(raiz) {
+    raiz.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      for (const mat of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!mat || mat.userData.conPunch) continue;
+        mat.userData.conPunch = true;
+        mat.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+             float lum = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+             gl_FragColor.rgb = mix( vec3( lum ), gl_FragColor.rgb, ${SATURACION.toFixed(2)} );
+             gl_FragColor.rgb = clamp( ( gl_FragColor.rgb - 0.5 ) * ${CONTRASTE.toFixed(2)} + 0.5, 0.0, 1.0 );`
+          );
+        };
+        // el shader ya compilado no se entera solo del cambio
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
   function makeToken(char) {
     const group = new THREE.Group();
     // El grupo se coloca en pixeles; dentro, un pivote escalado deja que el
@@ -433,12 +501,16 @@ export function createScene(container) {
     const pivote = new THREE.Group();
     group.add(pivote);
 
-    // Sombra aplastada, para que la ficha no parezca flotar sobre la cubierta
+    // Sombra de contacto. Un disco plano se ve como una pegatina; con un
+    // degradado (oscuro y cerrado bajo los pies, difuminado hacia fuera) la
+    // ficha se ancla a la cubierta en vez de parecer que flota.
     const sombra = new THREE.Mesh(
-      new THREE.CircleGeometry(0.38, 20),
-      new THREE.MeshBasicMaterial({ color: '#241a0e', transparent: true, opacity: 0.32, depthTest: false })
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: texturaSombra(), transparent: true, opacity: OPACIDAD_SOMBRA, depthTest: false, depthWrite: false,
+      })
     );
-    sombra.scale.set(1, 0.45, 1);
+    sombra.scale.set(0.82, 0.40, 1);
     sombra.position.y = 0.02;
     sombra.renderOrder = 2;
     pivote.add(sombra);
@@ -525,7 +597,7 @@ export function createScene(container) {
 
       const op = u.opacity === undefined ? 1 : u.opacity;
       tok.panelMat.opacity = op;
-      tok.sombra.material.opacity = 0.32 * op;
+      tok.sombra.material.opacity = OPACIDAD_SOMBRA * op;
       if (tok.modelo && tok.fade !== op) {
         tok.fade = op;
         setModelOpacity(tok.modelo, op);
