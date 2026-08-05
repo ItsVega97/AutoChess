@@ -4,25 +4,26 @@
 /**
  * De Mixamo al juego, en un solo paso.
  *
- * Mixamo te descarga TRES archivos .fbx sueltos (uno por animacion) y el juego
- * necesita UN .glb con las tres dentro. Juntarlos a mano en Blender es un rato
- * por personaje, y son 40. Esto lo hace solo:
+ * Mixamo te descarga los .fbx sueltos, uno por animacion, y el juego necesita
+ * UN .glb con todas dentro. Juntarlos a mano en Blender es un rato por
+ * personaje, y son 40. Esto lo hace solo:
  *
  *   1. convierte cada .fbx a .glb (FBX2glTF)
  *   2. coge el que trae el modelo (el que bajaste "With Skin") como base
- *   3. le pega las animaciones de los otros dos, reenganchando cada pista al
+ *   3. le pega las animaciones de los demas, reenganchando cada pista al
  *      hueso que le toca por NOMBRE (los esqueletos de Mixamo son iguales, pero
  *      cada archivo trae su propia copia; si no se reengancha, la animacion
  *      mueve un esqueleto invisible y la ficha se queda en pose de T)
- *   4. las renombra a Idle / Walking / Punching, que es lo que reconoce
+ *   4. las renombra a Idle / Walking / Punch / Death, que es lo que reconoce
  *      pickClips() en public/js/models.js
  *   5. avisa si alguna viene vacia (Mixamo a veces exporta clips de 2 claves y
  *      0,07 s que no mueven nada: es lo que le paso a Zoro, Rayleigh y Shiryu)
  *   6. optimiza texturas a WebP 1024 y guarda el resultado
  *
- * Uso:
+ * Uso (la muerte es opcional, las otras tres no):
  *   node tools/mixamo-a-glb.js --idle reposo.fbx --walk andar.fbx \
- *        --attack golpe.fbx --salida public/models/strawhat/luffy.glb
+ *        --attack golpe.fbx --death muerte.fbx \
+ *        --salida public/models/redhair/shanks.glb
  *
  * Tambien acepta .glb de entrada, por si tu herramienta ya exporta en ese
  * formato y te saltas la conversion.
@@ -65,7 +66,12 @@ function rutaFbx2gltf() {
 // ---------------- Argumentos ----------------
 function leerArgs(argv) {
   const args = { salida: null, clips: {} };
-  const alias = { idle: 'idle', reposo: 'idle', walk: 'walk', andar: 'walk', attack: 'attack', golpe: 'attack' };
+  const alias = {
+    idle: 'idle', reposo: 'idle',
+    walk: 'walk', andar: 'walk',
+    attack: 'attack', golpe: 'attack',
+    death: 'death', muerte: 'death',
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
@@ -80,7 +86,9 @@ function leerArgs(argv) {
 
 const DUR_MINIMA = 0.2; // el mismo umbral que usa el juego para descartar clips vacios
 // Los nombres que reconoce pickClips() sin ambiguedad
-const NOMBRE_FINAL = { idle: 'Idle', walk: 'Walking', attack: 'Punching' };
+const NOMBRE_FINAL = { idle: 'Idle', walk: 'Walking', attack: 'Punch', death: 'Death' };
+const ROLES = ['idle', 'walk', 'attack', 'death'];
+const OBLIGATORIOS = ['idle', 'walk', 'attack']; // la muerte es opcional
 
 // ---------------- Conversion ----------------
 function aGlb(entrada, tmp) {
@@ -177,10 +185,11 @@ function duracion(anim) {
 // ---------------- Principal ----------------
 async function main() {
   const args = leerArgs(process.argv.slice(2));
-  const faltan = ['idle', 'walk', 'attack'].filter((k) => !args.clips[k]);
+  const faltan = OBLIGATORIOS.filter((k) => !args.clips[k]);
   if (faltan.length || !args.salida) {
     console.error('Uso:\n  node tools/mixamo-a-glb.js --idle reposo.fbx --walk andar.fbx \\\n' +
-      '       --attack golpe.fbx --salida public/models/strawhat/luffy.glb\n');
+      '       --attack golpe.fbx [--death muerte.fbx] \\\n' +
+      '       --salida public/models/redhair/shanks.glb\n');
     if (faltan.length) console.error(`Falta: ${faltan.map((f) => `--${f}`).join(', ')}`);
     if (!args.salida) console.error('Falta: --salida');
     process.exit(1);
@@ -227,7 +236,8 @@ async function main() {
 
     console.log('\nPegando animaciones...');
     const porNombre = mapaDeHuesos(base);
-    for (const rol of ['idle', 'walk', 'attack']) {
+    for (const rol of ROLES) {
+      if (!args.clips[rol]) continue;
       if (rol === rolBase) continue;
       const r = pegarAnimacion(base, docs[rol], NOMBRE_FINAL[rol], porNombre);
       if (!r) { console.warn(`  ${rol}: el archivo no trae ninguna animacion`); continue; }
@@ -267,8 +277,11 @@ async function main() {
       console.log('El juego la descartara y tirara de otra, asi que la ficha se vera rara.');
       process.exit(2);
     }
-    if (resumen.length < 3) {
+    if (resumen.length < OBLIGATORIOS.length) {
       console.log('\nAVISO: faltan animaciones. El juego rellenara los huecos con las que haya.');
+    }
+    if (!args.clips.death) {
+      console.log('\nSin animacion de muerte: la ficha se quedara en reposo al caer.');
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

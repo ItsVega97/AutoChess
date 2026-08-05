@@ -438,8 +438,12 @@ node tools/mixamo-a-glb.js \
   --idle "Breathing Idle.fbx" \
   --walk "Walking.fbx" \
   --attack "Punching.fbx" \
-  --salida public/models/strawhat/luffy.glb
+  --death "Falling Back Death.fbx" \
+  --salida public/models/redhair/shanks.glb
 ```
+
+`--death` es opcional; las otras tres no. Sin ella la ficha se queda en reposo
+al caer, y el script te lo avisa.
 
 Convierte los FBX, coge el que trae el modelo (el que bajaste **With Skin**)
 como base, le pega las otras dos animaciones **reenganchando cada pista al hueso
