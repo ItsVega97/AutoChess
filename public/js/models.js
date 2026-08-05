@@ -149,31 +149,6 @@ export function instantiateModel(char) {
   });
 }
 
-// Precarga. Un modelo pesa ~1 MB: si se pide justo cuando compras al personaje,
-// la ficha tarda un momento en aparecer. Asi que en cuanto entras a la partida
-// se van bajando todos en segundo plano, de dos en dos para no ahogar la
-// conexion, y los que ya tienes delante se piden aparte y sin esperar cola.
-let precargando = false;
-export function preloadModels() {
-  if (precargando) return;
-  precargando = true;
-  fetchModelIndex().then((mapa) => {
-    if (!mapa) return;
-    const cola = Object.keys(mapa).map((k) => {
-      const corte = k.indexOf('/');
-      return { crew: k.slice(0, corte), id: k.slice(corte + 1) };
-    });
-    let enVuelo = 0;
-    const siguiente = () => {
-      while (enVuelo < 2 && cola.length) {
-        enVuelo++;
-        fetchModelFile(cola.shift()).then(() => { enVuelo--; siguiente(); });
-      }
-    };
-    siguiente();
-  });
-}
-
 /**
  * Reparte las animaciones que trae un .glb en las tres que usa el juego.
  * Los nombres los pone quien exporta el modelo (Mixamo suele mandar cosas como
@@ -220,6 +195,14 @@ export function pickClips(animations) {
   return clips;
 }
 
+/**
+ * Adelanta la descarga de los modelos que se van a ver ya: la tienda, el
+ * banquillo, la cubierta y, al empezar el combate, las fichas del rival.
+ *
+ * Aqui NO se bajan los 40. Un modelo pesa ~1 MB y en una partida se ven doce
+ * como mucho: descargarlos todos al entrar eran ~40 MB de datos moviles por
+ * sesion, la mayoria para fichas que no llegas a ver nunca.
+ */
 export function warmModels(chars) {
   for (const char of chars) {
     if (char && char.id && !modelFiles.has(char.id) && !modelPending.has(char.id)) fetchModelFile(char);

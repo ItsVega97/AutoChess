@@ -31,7 +31,10 @@ juego funciona igual y se entra sin cuenta, así que no es bloqueante.
   una ilustración y la correspondencia casilla-juego ↔ casilla-dibujo es una
   homografía sacada de las cuatro esquinas de la rejilla pintada.
 - `public/js/models.js` — carga de los `.glb`, normalización de tamaño y
-  reparto de las animaciones en reposo / andar / golpear.
+  reparto de las animaciones en reposo / andar / golpear / morir. **No se
+  precargan los 40**: son ~40 MB y en una partida se ven doce como mucho, así
+  que cada uno se pide cuando hace falta y `warmModels` adelanta los de la
+  tienda, el banquillo, la cubierta y las fichas del rival.
 - `public/js/game.js` — sockets, interfaz 2D y las pantallas ilustradas.
 
 ## Cosas que ya costaron encontrar (no las repitas)

@@ -29,6 +29,11 @@ import { getThumb, getThumbSync } from './thumbs.js';
   // Parte del hueco entre ataques que ocupa el golpe. El mismo numero que usa
   // scene3d para estirar o encoger la animacion: si se tocan, se tocan los dos.
   const PARTE_GOLPE = 0.7;
+  // Respiro al acabar el combate: los caidos terminan de desvanecerse y los que
+  // quedan en pie se quedan en reposo un rato antes de volver a preparacion.
+  // La sala da 6 s de fase de resultado (RESULT_MS en server/GameRoom.js), asi
+  // que esto tiene que quedarse por debajo.
+  const DESCANSO_MS = 5000;
 
   // ---------------- Alto real de la pantalla ----------------
   // En moviles 100vh cuenta tambien la franja que tapa la barra del navegador,
@@ -1160,6 +1165,15 @@ import { getThumb, getThumbSync } from './thumbs.js';
     battleUnits = new Map();
     battleActive = true;
     battleStartTs = performance.now();
+    // Las fichas del rival no las hemos visto nunca: se piden ya, al empezar el
+    // combate, para que no aparezcan a mitad de la pelea.
+    if (scene) {
+      const enJuego = [];
+      for (const ev of log) {
+        if (ev.type === 'spawn' && charDb[ev.pokemonId]) enJuego.push(charDb[ev.pokemonId]);
+      }
+      scene.warmModels(enJuego);
+    }
     if (scene) scene.setHighlights([]);
     setSelected(null);
     document.getElementById('battle-banner').classList.add('hidden');
@@ -1202,7 +1216,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         if (u && e.mana !== undefined) u.mana = e.mana;
         if (t && e.tMana !== undefined) t.mana = e.tMana;
         if (t) t.hp = e.hp;
-        if (u) u.golpeAt = now;
+        if (u) { u.golpeAt = now; u.objetivo = e.target; }
         if (u && t && scene) {
           const a = battleToRender(u.x, u.y);
           const b = battleToRender(t.x, t.y);
@@ -1268,6 +1282,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
       }
       case 'abilityHit': {
         const t = battleUnits.get(e.uid);
+        // La habilidad tambien orienta a quien la lanza. Si golpea a varios se
+        // queda mirando al ultimo, que a este tamano da igual.
+        const lanzador = battleUnits.get(e.source);
+        if (lanzador) lanzador.objetivo = e.uid;
         if (t) {
           t.hp = e.hp;
           const p = battleToRender(t.x, t.y);
@@ -1285,6 +1303,30 @@ import { getThumb, getThumbSync } from './thumbs.js';
       default:
         break;
     }
+  }
+
+  /**
+   * Hacia donde mira una ficha, en radianes y en pasos de 45º.
+   *
+   * Se orienta al rival al que esta pegando, no hacia donde camina: si se
+   * orientase por el movimiento, al avanzar a la mitad contraria se daria media
+   * vuelta en mitad del combate. Sin objetivo todavia (nada mas empezar) se
+   * devuelve undefined y la escena usa el valor por bando de siempre.
+   *
+   * El modelo con rotacion 0 mira hacia la camara, o sea hacia las filas de
+   * abajo; con PI mira al fondo. De ahi que el angulo salga de atan2(dx, dy)
+   * con dy medido en filas de render, no al reves.
+   */
+  const PASO_GIRO = Math.PI / 4; // ocho direcciones
+  function mirandoA(u, col, row) {
+    if (!u.objetivo) return undefined;
+    const obj = battleUnits.get(u.objetivo);
+    if (!obj) return undefined;
+    const p = battleToRender(obj.toX, obj.toY);
+    const dx = p.col - col;
+    const dy = p.row - row;
+    if (!dx && !dy) return undefined;
+    return Math.round(Math.atan2(dx, dy) / PASO_GIRO) * PASO_GIRO;
   }
 
   function battleFrame(now) {
@@ -1324,9 +1366,9 @@ import { getThumb, getThumbSync } from './thumbs.js';
         uid,
         char: { ...ch, star: u.star },
         col, row,
-        // Los modelos miran siempre al bando contrario, no hacia donde caminan:
-        // si se orientase por la fila, al avanzar a la mitad rival se darian
-        // media vuelta en mitad del combate.
+        // Hacia donde mira: al rival al que esta pegando, en pasos de 45º. Sin
+        // objetivo (al empezar el combate) se cae al valor por bando.
+        facing: mirandoA(u, col, row),
         mine: u.side === battleSide,
         selected: false,
         showHp: u.alive,
@@ -1341,7 +1383,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
 
     const doneEvents = battleIdx >= battleLog.length;
     const lastEventTime = battleLog.length ? battleLog[battleLog.length - 1].t * TICK_MS : 0;
-    if (doneEvents && elapsed > lastEventTime + 700) {
+    // A partir del ultimo evento y hasta que se acaba el descanso, los que
+    // siguen en pie se quedan en reposo: no hay nada mas que reproducir.
+    window.__descansandoTest = doneEvents;
+    if (doneEvents && elapsed > lastEventTime + DESCANSO_MS) {
       battleActive = false;
       refreshBoard();
       return;
@@ -1356,9 +1401,10 @@ import { getThumb, getThumbSync } from './thumbs.js';
     try {
       scene = createScene(container);
       scene.setBoard(boardCols, boardRows);
-      // Nos traemos los modelos 3D en segundo plano nada mas entrar, para que
-      // ninguna ficha tarde en aparecer cuando la compres.
-      scene.preloadModels();
+      // Nada de bajarse los 40 modelos aqui: son ~40 MB y en una partida se
+      // ven doce como mucho. Cada modelo se pide cuando hace falta, y en
+      // renderState se adelantan los de la tienda, el banquillo y la cubierta,
+      // que son los que estas a punto de ver.
       syncSceneInsets();
       // Utilidad para las pruebas automaticas: comprobar que casilla cae bajo
       // un punto de la pantalla (sirve para verificar que el tablero entero

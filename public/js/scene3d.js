@@ -20,7 +20,7 @@
  */
 
 import * as THREE from '../vendor/three.module.min.js';
-import { instantiateModel, preloadModels, warmModels, pickClips, MODEL_HEIGHT } from './models.js';
+import { instantiateModel, warmModels, pickClips, MODEL_HEIGHT } from './models.js';
 
 // La ilustracion y las 4 esquinas de su rejilla 5x6, en pixeles de la imagen
 // original. Si se cambia el dibujo hay que volver a medirlas.
@@ -632,7 +632,11 @@ export function createScene(container) {
       // Cada bando mira al contrario, vaya por donde vaya durante el combate.
       // Los modelos vienen mirando al +Z (hacia la camara), asi que los mios
       // se giran media vuelta para encarar el fondo.
-      tok.facing = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
+      // Si viene con objetivo, mira hacia el (game.js lo da en pasos de 45º);
+      // si no, hacia el bando contrario, que es lo que vale en preparacion y
+      // al empezar el combate.
+      const porBando = (u.mine === undefined ? u.row >= rows / 2 : u.mine) ? Math.PI : 0;
+      tok.facing = u.facing === undefined ? porBando : u.facing;
       if (tok.modelo) tok.modelo.rotation.y = tok.facing;
       // reposo / andando / golpeando, segun lo que este haciendo en el combate
       ponerAccion(tok, u.accion || 'idle');
@@ -882,7 +886,7 @@ export function createScene(container) {
   return {
     setBoard, syncUnits, setHighlights, pickCell, setInsets,
     addFloatingText, addAttackBeam, addAbilityBurst, resize, dispose,
-    preloadModels, warmModels,
+    warmModels,
     get cols() { return cols; },
     get rows() { return rows; },
     get tokens() { return tokens; }, // solo para pruebas automatizadas

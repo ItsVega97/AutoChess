@@ -399,6 +399,17 @@ En combate cada ficha pide la suya: anda mientras se mueve de casilla, pega al
 atacar o al lanzar su habilidad, se cae al morir y el resto del tiempo está en
 reposo, con una mezcla corta entre una y otra para que no salte de golpe.
 
+**Se giran hacia su objetivo**, en pasos de 45º (las ocho direcciones). El
+ángulo sale de la posición del rival al que están pegando, no de hacia dónde
+caminan: si se orientasen por el movimiento, al avanzar a la mitad contraria se
+darían media vuelta en mitad del combate. Mientras no tienen objetivo (nada más
+empezar) miran al bando contrario, como siempre.
+
+Al acabar el combate hay **5 segundos de descanso**: los caídos terminan de
+desvanecerse y los que quedan en pie se quedan en reposo antes de volver al
+tablero de preparación. La sala da 6 s de fase de resultado (`RESULT_MS` en
+`server/GameRoom.js`), así que el descanso tiene que quedarse por debajo.
+
 **El ritmo lo pone el motor, no Mixamo.** Descarga los clips tal cual y
 `scene3d.js` los estira o los encoge:
 
