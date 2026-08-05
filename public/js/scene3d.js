@@ -321,6 +321,12 @@ export function createScene(container) {
         if (!clip) continue;
         const accion = mixer.clipAction(clip);
         accion.timeScale = ritmo(nombre, clip, char);
+        // La muerte no se repite: se cae una vez y se queda en el suelo hasta
+        // que la ficha se desvanece.
+        if (nombre === 'death') {
+          accion.setLoop(THREE.LoopOnce, 1);
+          accion.clampWhenFinished = true;
+        }
         tok.acciones[nombre] = accion;
       }
       tok.accionActual = null;
@@ -351,17 +357,26 @@ export function createScene(container) {
   const ATK_SPEED_POR_DEFECTO = 7;
   const VEL_ANDAR = 0.75;
   const VEL_REPOSO = 0.85;
+  // La ficha se desvanece a los 1200 ms de morir (ver game.js), asi que la
+  // caida tiene que estar terminada antes: los clips de muerte vienen de 4 s y
+  // se quedarian a medias.
+  const DUR_MUERTE = 1.5;
 
   function ritmo(nombre, clip, char) {
     if (nombre === 'walk') return VEL_ANDAR;
     if (nombre === 'idle') return VEL_REPOSO;
+    if (nombre === 'death') {
+      return clip.duration ? Math.min(6, Math.max(0.5, clip.duration / DUR_MUERTE)) : 1;
+    }
     if (nombre !== 'attack') return 1;
     const ticks = (char && char.atkSpeed) || ATK_SPEED_POR_DEFECTO;
     const objetivo = (ticks * TICK_MS / 1000) * PARTE_GOLPE; // segundos
     if (!clip.duration || !objetivo) return 1;
     // Con topes: un clip muy corto estirado a camara lenta queda peor que uno
     // que no encaje del todo.
-    return Math.min(4, Math.max(0.4, clip.duration / objetivo));
+    // El tope alto tiene que dar para los clips largos de arco (5 s), que si no
+    // se quedan a medias entre flecha y flecha.
+    return Math.min(6, Math.max(0.4, clip.duration / objetivo));
   }
 
   // Cambia de animacion con una mezcla corta, para que no salte de golpe
@@ -375,7 +390,9 @@ export function createScene(container) {
     nueva.enabled = true;
     nueva.setEffectiveWeight(1);
     nueva.play();
-    if (vieja) nueva.crossFadeFrom(vieja, nombre === 'attack' ? 0.08 : 0.18, false);
+    // El golpe entra seco y la muerte tambien, para que el momento se note;
+    // el resto con una mezcla mas suave.
+    if (vieja) nueva.crossFadeFrom(vieja, nombre === 'attack' || nombre === 'death' ? 0.08 : 0.18, false);
     tok.accionActual = nueva;
     tok.accionNombre = nombre;
   }

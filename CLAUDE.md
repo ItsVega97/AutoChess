@@ -57,15 +57,17 @@ juego funciona igual y se entra sin cuenta, así que no es bloqueante.
 
 ## Modelos 3D de los personajes
 
-Van en `public/models/<tripulación>/<id>.glb`, con tres animaciones dentro
-llamadas `Idle`, `Walking` y `Punching`.
+Van en `public/models/<tripulación>/<id>.glb`, con cuatro animaciones dentro:
+`Idle`, `Walking`, `Punch` (o `Arrow` si es a distancia) y `Death`.
 
 La cadena es: imagen chibi → Meshy (Smart Topology, T-Pose, ~15.000 polígonos)
 → Mixamo (esqueleto *No Fingers*, tres animaciones) → `tools/mixamo-a-glb.js`,
 que las junta en un solo archivo. Está documentado en el README.
 
 El ritmo de las animaciones **no se hornea en Mixamo**: lo pone el motor, en
-`scene3d.js`, a partir del `atkSpeed` de cada ficha.
+`scene3d.js`, a partir del `atkSpeed` de cada ficha. Y **las texturas de Meshy
+vienen a 4096**, que son 25 MB por modelo: hay que bajarlas a 1024 antes de
+meterlas en el repositorio (de 25 MB a ~1 MB).
 
 ## Comprobar los cambios
 

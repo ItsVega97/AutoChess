@@ -23,6 +23,12 @@ import { getThumb, getThumbSync } from './thumbs.js';
   let battleIdx = 0;
   let battleStartTs = 0;
   const TICK_MS = 150;
+  // Cuanto se queda en pantalla una ficha muerta. Tiene que dar para que se
+  // vea la caida entera (scene3d la ajusta a 1,5 s) antes de desvanecerse.
+  const MUERTE_MS = 1800;
+  // Parte del hueco entre ataques que ocupa el golpe. El mismo numero que usa
+  // scene3d para estirar o encoger la animacion: si se tocan, se tocan los dos.
+  const PARTE_GOLPE = 0.7;
 
   // ---------------- Alto real de la pantalla ----------------
   // En moviles 100vh cuenta tambien la franja que tapa la barra del navegador,
@@ -1293,9 +1299,11 @@ import { getThumb, getThumbSync } from './thumbs.js';
     for (const [uid, u] of battleUnits) {
       let fade = 1;
       if (!u.alive) {
+        // Hay que darle tiempo a caerse antes de desvanecerla: la ficha se ve
+        // el doble de tiempo que antes, y solo se difumina en el ultimo tramo.
         const age = now - (u.deathAt || now);
-        if (age > 500) continue;
-        fade = Math.max(0, 1 - age / 500);
+        if (age > MUERTE_MS) continue;
+        fade = Math.max(0, 1 - Math.max(0, age - MUERTE_MS * 0.55) / (MUERTE_MS * 0.45));
       }
       let px = u.toX, py = u.toY;
       const andando = u.moveStart && now - u.moveStart < u.moveDur;
@@ -1304,10 +1312,13 @@ import { getThumb, getThumbSync } from './thumbs.js';
         px = u.fromX + (u.toX - u.fromX) * f;
         py = u.fromY + (u.toY - u.fromY) * f;
       }
-      // El golpe manda sobre el paso: si ataca mientras se movia, se ve pegar
-      const golpeando = u.alive && u.golpeAt && now - u.golpeAt < 620;
       const ch = charDb[u.pokemonId];
       if (!ch) continue;
+      // El golpe manda sobre el paso: si ataca mientras se movia, se ve pegar.
+      // La ventana dura lo mismo que la animacion (scene3d la ajusta con esta
+      // misma cuenta), asi que el golpe se ve entero y no cortado.
+      const ventanaGolpe = (ch.atkSpeed || 7) * TICK_MS * PARTE_GOLPE;
+      const golpeando = u.alive && u.golpeAt && now - u.golpeAt < ventanaGolpe;
       const { col, row } = battleToRender(px, py);
       units.push({
         uid,
@@ -1323,7 +1334,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
         mana: u.mana,
         maxMana: u.maxMana,
         opacity: fade,
-        accion: golpeando ? 'attack' : (andando && u.alive) ? 'walk' : 'idle',
+        accion: !u.alive ? 'death' : golpeando ? 'attack' : andando ? 'walk' : 'idle',
       });
     }
     if (scene) scene.syncUnits(units);

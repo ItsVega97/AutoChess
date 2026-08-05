@@ -182,8 +182,10 @@ export function preloadModels() {
  * esa vale para todo.
  */
 // Ojo con el orden: "Standing Run Forward" es andar aunque empiece por
-// "Standing", asi que andar y golpear se miran antes que el reposo.
+// "Standing", asi que andar y golpear se miran antes que el reposo. La muerte
+// va la primera porque "Falling Back Death" tambien encaja en otras.
 const PISTAS = [
+  ['death', /death|dying|die\b|dead|fall|muerte|morir|caer/i],
   ['walk', /walk|run|caminar|andar|correr|march/i],
   ['attack', /punch|attack|hit|kick|slash|strike|combat|combo|sword|swing|melee|shoot|shot|fire|blast|throw|arrow|archer|bow|cast|spell|magic|golpe|ataque|patada|espada|corte|disparo|flecha/i],
   ['idle', /idle|gesture|breath|stand|reposo|descans|espera/i],
@@ -194,7 +196,7 @@ const PISTAS = [
 // se tira de las que si valgan.
 const DUR_MINIMA = 0.2;
 export function pickClips(animations) {
-  const clips = { idle: null, walk: null, attack: null };
+  const clips = { idle: null, walk: null, attack: null, death: null };
   const sobran = [];
   const buenas = (animations || []).filter((c) => c.duration >= DUR_MINIMA);
   // si TODAS son asi, mejor eso que nada
@@ -207,7 +209,9 @@ export function pickClips(animations) {
   }
   // Lo que no se ha reconocido se reparte por los huecos que queden: un modelo
   // con tres animaciones casi siempre trae reposo, andar y golpe, aunque las
-  // llame de cualquier manera.
+  // llame de cualquier manera. La muerte se queda fuera del reparto a
+  // proposito: es mejor no tenerla que caerse al suelo con una animacion que
+  // en realidad era otra cosa.
   for (const hueco of ['attack', 'walk', 'idle']) {
     if (!clips[hueco] && sobran.length) clips[hueco] = sobran.shift();
   }

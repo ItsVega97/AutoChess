@@ -385,18 +385,34 @@ pantalla completa que se usaron para calcular las medidas.
 
 ## Animaciones de los modelos
 
-Un `.glb` puede traer animaciones, y el juego usa tres: **reposo**, **andar** y
-**golpear**. Se reparten por el nombre del clip (no por el orden), buscando
-palabras sueltas: `walk`/`run`/`caminar` → andar, `punch`/`attack`/`kick`/`golpe`
-→ golpear, `idle`/`gesture`/`stand`/`reposo` → reposo. Lo que no encaje se
-queda de reposo, y un modelo con una sola animación la usa para todo. Los
-nombres que suelta Mixamo (`Walking`, `Punching Bag`, `Head Gesture`) ya caen
-donde toca.
+Un `.glb` puede traer animaciones, y el juego usa cuatro: **reposo**, **andar**,
+**golpear** y **morir**. Se reparten por el nombre del clip (no por el orden),
+buscando palabras sueltas: `death`/`muerte`/`fall` → morir, `walk`/`run`/`caminar`
+→ andar, `punch`/`attack`/`arrow`/`golpe` → golpear, `idle`/`gesture`/`stand`
+→ reposo. Lo que no encaje se reparte por los huecos que queden, **menos la
+muerte**: es mejor no tenerla que caerse al suelo con una animación que en
+realidad era otra cosa. Un modelo con una sola animación la usa para todo. Los
+nombres que suelta Mixamo (`Walking`, `Punch`, `Arrow`, `Death`) ya caen donde
+toca.
 
 En combate cada ficha pide la suya: anda mientras se mueve de casilla, pega al
-atacar o al lanzar su habilidad y el resto del tiempo está en reposo, con una
-mezcla corta entre una y otra para que no salte de golpe. El golpe se acelera
-para que quepa entero en el tiempo que dura un ataque (~0,6 s).
+atacar o al lanzar su habilidad, se cae al morir y el resto del tiempo está en
+reposo, con una mezcla corta entre una y otra para que no salte de golpe.
+
+**El ritmo lo pone el motor, no Mixamo.** Descarga los clips tal cual y
+`scene3d.js` los estira o los encoge:
+
+- **Golpear** dura el 70% del hueco que el motor deja entre ataque y ataque
+  (`atkSpeed` × 150 ms), así que el que pega rápido se ve pegando rápido: Sanji
+  y Zoro (atkSpeed 6) golpean en 0,63 s y Nami y Usopp (8) en 0,84 s. El 30%
+  restante es el respiro. `game.js` usa esa misma cuenta para decidir cuánto
+  tiempo pide el golpe, así no se corta a medias.
+- **Morir** se ajusta a 1,5 s, se reproduce **una sola vez** y se queda en el
+  suelo; la ficha se desvanece a los 1,8 s.
+- **Andar** y **reposo** van a 0,75 y 0,85: las animaciones de Mixamo son de
+  persona a tamaño real y a 55 píxeles se ven nerviosas.
+
+Los números están juntos y comentados arriba de `ponerAccion()`.
 
 ### De Mixamo al juego, en un comando
 
