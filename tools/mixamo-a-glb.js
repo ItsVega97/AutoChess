@@ -65,7 +65,7 @@ function rutaFbx2gltf() {
 
 // ---------------- Argumentos ----------------
 function leerArgs(argv) {
-  const args = { salida: null, clips: {} };
+  const args = { salida: null, modelo: null, clips: {} };
   const alias = {
     idle: 'idle', reposo: 'idle',
     walk: 'walk', andar: 'walk',
@@ -78,6 +78,7 @@ function leerArgs(argv) {
     const clave = a.slice(2).toLowerCase();
     const valor = argv[++i];
     if (clave === 'salida' || clave === 'out') args.salida = valor;
+    else if (clave === 'modelo' || clave === 'model') args.modelo = valor;
     else if (alias[clave]) args.clips[alias[clave]] = valor;
     else console.warn(`Opcion desconocida, la ignoro: --${clave}`);
   }
@@ -189,7 +190,9 @@ async function main() {
   if (faltan.length || !args.salida) {
     console.error('Uso:\n  node tools/mixamo-a-glb.js --idle reposo.fbx --walk andar.fbx \\\n' +
       '       --attack golpe.fbx [--death muerte.fbx] \\\n' +
-      '       --salida public/models/redhair/shanks.glb\n');
+      '       --salida public/models/redhair/shanks.glb\n\n' +
+      'Para reaprovechar las animaciones de otro personaje (mismo esqueleto):\n' +
+      '  node tools/mixamo-a-glb.js --modelo shanks.glb --idle otro.glb ...\n');
     if (faltan.length) console.error(`Falta: ${faltan.map((f) => `--${f}`).join(', ')}`);
     if (!args.salida) console.error('Falta: --salida');
     process.exit(1);
@@ -209,29 +212,43 @@ async function main() {
       console.log(`  ${rol.padEnd(6)} ${path.basename(f)}`);
     }
 
-    // La base es la que trae el modelo (la que bajaste "With Skin").
-    // Si hay varias con malla, vale la de reposo.
     const docs = {};
     for (const [rol, g] of Object.entries(glbs)) docs[rol] = await io.read(g);
-    const conMalla = Object.keys(docs).filter((r) => docs[r].getRoot().listMeshes().length > 0);
-    if (!conMalla.length) {
-      console.error('\nNinguno de los tres archivos trae el modelo.\n' +
-        'En Mixamo, descarga UNA de las animaciones con "With Skin".');
-      process.exit(1);
-    }
-    const rolBase = conMalla.includes('idle') ? 'idle' : conMalla[0];
-    const base = docs[rolBase];
-    console.log(`\nModelo base: ${rolBase} (${base.getRoot().listMeshes().length} mallas, ` +
-      `${base.getRoot().listNodes().length} nodos)`);
 
-    // La animacion que ya venia en la base se queda, solo se renombra
+    // Con --modelo, el personaje viene de un archivo aparte y TODAS las
+    // animaciones se pegan encima: es el caso de reaprovechar las de otro
+    // personaje que se rigeo con el mismo esqueleto.
+    let base;
+    let rolBase = null;
     const resumen = [];
-    const suyas = base.getRoot().listAnimations();
-    if (suyas.length) {
-      suyas.sort((a, b) => duracion(b) - duracion(a));
-      suyas[0].setName(NOMBRE_FINAL[rolBase]);
-      for (const sobra of suyas.slice(1)) sobra.dispose();
-      resumen.push({ rol: rolBase, nombre: NOMBRE_FINAL[rolBase], dur: duracion(suyas[0]) });
+    if (args.modelo) {
+      base = await io.read(aGlb(args.modelo, tmp));
+      for (const vieja of base.getRoot().listAnimations()) vieja.dispose();
+      console.log(`\nModelo: ${path.basename(args.modelo)} ` +
+        `(${base.getRoot().listMeshes().length} mallas, ${base.getRoot().listNodes().length} nodos)`);
+    } else {
+      // La base es la que trae el modelo (la que bajaste "With Skin").
+      // Si hay varias con malla, vale la de reposo.
+      const conMalla = Object.keys(docs).filter((r) => docs[r].getRoot().listMeshes().length > 0);
+      if (!conMalla.length) {
+        console.error('\nNinguno de los archivos trae el modelo.\n' +
+          'En Mixamo, descarga UNA de las animaciones con "With Skin", o pasa el\n' +
+          'personaje aparte con --modelo.');
+        process.exit(1);
+      }
+      rolBase = conMalla.includes('idle') ? 'idle' : conMalla[0];
+      base = docs[rolBase];
+      console.log(`\nModelo base: ${rolBase} (${base.getRoot().listMeshes().length} mallas, ` +
+        `${base.getRoot().listNodes().length} nodos)`);
+
+      // La animacion que ya venia en la base se queda, solo se renombra
+      const suyas = base.getRoot().listAnimations();
+      if (suyas.length) {
+        suyas.sort((a, b) => duracion(b) - duracion(a));
+        suyas[0].setName(NOMBRE_FINAL[rolBase]);
+        for (const sobra of suyas.slice(1)) sobra.dispose();
+        resumen.push({ rol: rolBase, nombre: NOMBRE_FINAL[rolBase], dur: duracion(suyas[0]) });
+      }
     }
 
     console.log('\nPegando animaciones...');

@@ -328,6 +328,16 @@ mapa `LIENZOS` de `public/js/game.js`:
 | Menú | `harbor.webp` | `menu-lienzo` |
 | Ránkings | `rankings.webp` | `rank-lienzo` |
 | Wiki Pirata | `wiki.webp` | `wiki-lienzo` |
+| Fin de partida | `victoria.webp` / `derrota.webp` | `fin-lienzo` |
+
+Ojo con la de fin de partida: son **dos** ilustraciones y **no comparten
+maqueta** — en la derrota el panel y los botones caen más arriba y son más
+estrechos. Por eso las cajas van duplicadas en `style.css` (`#screen-end.fin-vic`
+y `#screen-end.fin-der`) y `game.js` pone una clase u otra según el resultado.
+Encima del dibujo solo van los cuatro datos reales (puntos ganados o perdidos,
+división, progreso y barra) sobre un parche del color del panel, más las zonas
+tocables de los dos botones. Sin cuenta no hay puntos que enseñar, así que se
+tapa el panel entero con un aviso.
 
 Si cambias un dibujo hay que volver a medir sus cajas. El lienzo arranca oculto
 y `game.js` lo destapa al colocarlo: el HTML se pinta antes de que corra el

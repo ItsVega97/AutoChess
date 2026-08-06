@@ -68,6 +68,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
     'menu-lienzo': { w: 1024, h: 1536, cx: 537, cy: 765, ancho: 725, alto: 1420 },
     'wiki-lienzo': { w: 1024, h: 1536, cx: 521, cy: 697, ancho: 972, alto: 1365 },
     'login-lienzo': { w: 1024, h: 1536, cx: 512, cy: 730, ancho: 700, alto: 1220 },
+    'fin-lienzo': { w: 1086, h: 1448, cx: 543, cy: 750, ancho: 1000, alto: 1400 },
     'perfil-lienzo': { w: 1024, h: 1536, cx: 512, cy: 730, ancho: 700, alto: 1220 },
     'rank-lienzo': { w: 1024, h: 1536, cx: 512, cy: 775, ancho: 800, alto: 1380 },
   };
@@ -600,7 +601,7 @@ import { getThumb, getThumbSync } from './thumbs.js';
   arrancarSesion();
   // Puertas de entrada para las pruebas automaticas: sin cuenta de Google de
   // verdad no hay forma de llegar a estas pantallas desde fuera.
-  window.__cuentaTest = { abrirPerfil, aplicarCuenta, cargarRankings, show };
+  window.__cuentaTest = { abrirPerfil, aplicarCuenta, cargarRankings, show, pintarFin, guardarToken };
 
   document.getElementById('btn-play-online').addEventListener('click', () => {
     const name = (nameInput.value || 'Pirata').trim().slice(0, 16);
@@ -717,24 +718,63 @@ import { getThumb, getThumbSync } from './thumbs.js';
     mostrarBanner.t = setTimeout(() => toast.classList.add('hidden'), ms || 3000);
   }
 
-  socket.on('gameOver', ({ won, draw }) => {
-    document.getElementById('end-title').textContent = draw ? 'Empate' : won ? 'Victoria' : 'Derrota';
-    const sub = document.getElementById('end-subtitle');
-    sub.textContent = '';
-    show('screen-end');
-    // Con cuenta, la partida suma o resta puntos de ranking: se pide el total
-    // nuevo para enseñarlo aqui mismo.
-    if (!authToken || !cuenta) return;
-    const signo = won ? `+${config ? config.puntos.victoria : 20}` : `${config ? config.puntos.derrota : -15}`;
-    sub.textContent = `${signo} pts de ránking`;
+  /**
+   * Pinta el panel de recompensas de la pantalla de fin.
+   *
+   * El cartel, el panel y los botones vienen pintados en la ilustracion; aqui
+   * solo se tapan los cuatro datos de ejemplo (puntos, division, progreso y
+   * barra) con los de verdad. Sin cuenta no hay puntos, asi que se tapa el
+   * panel entero con un aviso.
+   */
+  function pintarFin(won, draw) {
+    const pantalla = document.getElementById('screen-end');
+    // Un empate no es una derrota, pero tampoco hay victoria que celebrar
+    pantalla.classList.toggle('fin-vic', !!won);
+    pantalla.classList.toggle('fin-der', !won);
+
+    const aviso = document.getElementById('fin-invitado');
+    const conCuenta = !!(authToken && cuenta && cuenta.name);
+    aviso.classList.toggle('hidden', conCuenta);
+    for (const id of ['fin-puntos', 'fin-division', 'fin-progreso']) {
+      document.getElementById(id).style.display = conCuenta ? '' : 'none';
+    }
+    document.querySelector('.f-barra').style.display = conCuenta ? '' : 'none';
+    if (!conCuenta) return;
+
+    const delta = draw ? 0
+      : won ? (config ? config.puntos.victoria : 20)
+        : (config ? config.puntos.derrota : -15);
+    document.getElementById('fin-puntos').textContent = delta > 0 ? `+${delta}` : String(delta);
+
+    // El total nuevo lo tiene el servidor: se pide y se rellena al llegar
     fetch('api/me', { headers: cabeceras() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d || !d.user) return;
         cuenta = d.user;
-        sub.textContent = `${signo} pts · ${cuenta.points} en total · ${cuenta.division.label}`;
+        document.getElementById('fin-division').textContent = (cuenta.division.label || '').toUpperCase();
+        const div = (config && config.divisiones || []).find((x) => x.id === cuenta.division.id);
+        // La ultima division no tiene techo: la barra se queda llena
+        const desde = div ? div.min : 0;
+        const hasta = div && div.max ? div.max : Math.max(cuenta.points, desde + 1);
+        document.getElementById('fin-progreso').textContent =
+          `${conMiles(cuenta.points)} / ${conMiles(hasta)}`;
+        const frac = div && div.max
+          ? Math.min(1, Math.max(0, (cuenta.points - desde) / (hasta - desde))) : 1;
+        document.getElementById('fin-barra-fill').style.width = `${Math.round(frac * 100)}%`;
       })
       .catch(() => {});
+  }
+
+  socket.on('gameOver', ({ won, draw }) => {
+    pintarFin(won, draw);
+    show('screen-end');
+  });
+
+  document.getElementById('btn-end-menu').addEventListener('click', () => {
+    // Se recarga igual que "jugar de nuevo": la sala ya no existe y asi la
+    // conexion arranca limpia.
+    location.reload();
   });
 
   // ---------------- Estado de partida ----------------

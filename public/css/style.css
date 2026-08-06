@@ -1132,6 +1132,124 @@ body.in-game { height: min(var(--app-height, 100svh), 100svh); }
 .p-ok:active { transform: translateY(2px); }
 .p-ok:disabled { filter: grayscale(.5); opacity: .7; cursor: default; }
 
+/* ---------- Fin de partida ----------
+   Dos ilustraciones de 1086x1448 (victoria y derrota) con el cartel, el panel
+   de recompensas y los botones ya pintados. Encima van solo los datos reales.
+
+   Las dos maquetas NO coinciden: en la derrota el panel y los botones caen mas
+   arriba y son mas estrechos. Por eso las cajas van duplicadas, .fin-vic y
+   .fin-der, y game.js pone una clase u otra segun el resultado. */
+#screen-end.active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  height: min(var(--app-height, 100svh), 100svh);
+  overflow: hidden;
+  padding: 0;
+}
+#screen-end.active::before {
+  content: '';
+  position: absolute;
+  inset: -30px;
+  background: var(--fin-fondo) no-repeat center / cover;
+  filter: blur(24px) brightness(.55) saturate(.9);
+  transform: scale(1.18);
+}
+.fin-lienzo {
+  width: 1086px;
+  height: 1448px;
+  background: var(--fin-fondo) no-repeat 0 0 / 1086px 1448px;
+}
+#screen-end.fin-vic { --fin-fondo: url('../img/menu/victoria.webp'); }
+#screen-end.fin-der { --fin-fondo: url('../img/menu/derrota.webp'); }
+
+/* Los datos van sobre un parche del color del panel pintado, que es casi negro */
+.f-puntos, .f-division, .f-progreso, .f-invitado {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1b1309;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  /* Si se sale, se recorta: el parche tapa el dato pintado y no puede
+     desbordarse por encima del escudo ni del borde del panel. */
+  overflow: hidden;
+}
+.f-puntos { font-size: 62px; color: var(--gold); }
+#screen-end.fin-der .f-puntos { color: #e2564e; }
+/* «Shichibukai» es el nombre de division mas largo y tiene que caber justo */
+.f-division { font-size: 27px; color: #c07dff; }
+.f-progreso { font-size: 24px; color: #e8d7ba; }
+.f-barra {
+  position: absolute;
+  border-radius: 10px;
+  background: #191107;
+  box-shadow: inset 0 0 0 2px rgba(120,84,32,.7);
+  overflow: hidden;
+}
+.f-barra span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #d07bff, #8d2ee0);
+  transition: width .8s ease;
+}
+/* Sin cuenta no hay puntos que enseñar: se tapa el panel entero */
+.f-invitado {
+  font-size: 30px;
+  color: #e8d7ba;
+  padding: 0 30px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+  border-radius: 10px;
+}
+.f-invitado.hidden { display: none; }
+
+.f-boton {
+  position: absolute;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.f-boton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #fff;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.f-boton:hover::after { opacity: .15; }
+.f-boton:active::after { opacity: .28; }
+.f-boton:focus-visible { outline: 4px solid var(--gold); outline-offset: 3px; }
+
+/* --- cajas de la VICTORIA --- */
+#screen-end.fin-vic .f-puntos    { left: 345px; top: 1238px; width: 145px; height: 62px; }
+#screen-end.fin-vic .f-division  { left: 685px; top: 1238px; width: 212px; height: 42px; }
+#screen-end.fin-vic .f-progreso  { left: 685px; top: 1274px; width: 212px; height: 32px; }
+#screen-end.fin-vic .f-barra     { left: 690px; top: 1303px; width: 168px; height: 19px; }
+#screen-end.fin-vic .f-invitado  { left: 200px; top: 1215px; width: 690px; height: 120px; }
+#screen-end.fin-vic .f-menu      { left: 205px; top: 1368px; width: 297px; height: 60px; }
+#screen-end.fin-vic .f-jugar     { left: 595px; top: 1368px; width: 300px; height: 60px; }
+
+/* --- cajas de la DERROTA --- */
+#screen-end.fin-der .f-puntos    { left: 368px; top: 1210px; width: 134px; height: 60px; }
+#screen-end.fin-der .f-division  { left: 658px; top: 1212px; width: 208px; height: 40px; }
+#screen-end.fin-der .f-progreso  { left: 658px; top: 1248px; width: 208px; height: 30px; }
+#screen-end.fin-der .f-barra     { left: 672px; top: 1276px; width: 185px; height: 18px; }
+#screen-end.fin-der .f-invitado  { left: 210px; top: 1200px; width: 660px; height: 110px; }
+#screen-end.fin-der .f-menu      { left: 213px; top: 1336px; width: 293px; height: 56px; }
+#screen-end.fin-der .f-jugar     { left: 593px; top: 1336px; width: 290px; height: 56px; }
+
 /* ---------- Ránkings ----------
    Las divisiones y la cabecera de la tabla ya vienen pintadas; encima solo se
    dibujan las filas de jugadores, tapando las de ejemplo del dibujo. */

@@ -147,12 +147,21 @@
   </div>
 </section>
 
-<!-- ================= FIN DE PARTIDA ================= -->
+<!-- ================= FIN DE PARTIDA =================
+     Dos ilustraciones, una por resultado. El cartel, el panel y los botones
+     vienen pintados; encima solo van los datos de verdad (los puntos que has
+     sumado o perdido y tu division) y las zonas tocables de los botones.
+     OJO: las dos maquetas NO estan en el mismo sitio, asi que cada una tiene
+     sus propias cajas (.fin-vic / .fin-der en style.css). -->
 <section id="screen-end" class="screen">
-  <div class="menu-card">
-    <h1 id="end-title" class="logo">¡Victoria!</h1>
-    <p id="end-subtitle" class="subtitle">Has ganado la partida</p>
-    <button id="btn-restart" class="btn btn-primary">Jugar de nuevo</button>
+  <div class="lienzo fin-lienzo" id="fin-lienzo">
+    <div class="f-puntos" id="fin-puntos"></div>
+    <div class="f-division" id="fin-division"></div>
+    <div class="f-progreso" id="fin-progreso"></div>
+    <div class="f-barra"><span id="fin-barra-fill"></span></div>
+    <div class="f-invitado hidden" id="fin-invitado">Inicia sesión para sumar puntos de ránking</div>
+    <button id="btn-end-menu" class="f-boton f-menu" aria-label="Volver al menú"></button>
+    <button id="btn-restart" class="f-boton f-jugar" aria-label="Jugar de nuevo"></button>
   </div>
 </section>
 
